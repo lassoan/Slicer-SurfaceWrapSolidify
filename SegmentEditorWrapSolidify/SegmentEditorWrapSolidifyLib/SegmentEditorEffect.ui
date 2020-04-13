@@ -230,7 +230,7 @@ CAVE: If this smaller than the spacing of the input segmentation, it might appea
       <item row="0" column="0">
        <widget class="QRadioButton" name="outputSegmentationRadioButton">
         <property name="text">
-         <string>Segmentation</string>
+         <string>Segment:</string>
         </property>
        </widget>
       </item>
@@ -259,6 +259,13 @@ CAVE: If this smaller than the spacing of the input segmentation, it might appea
         </property>
         <property name="noneDisplay">
          <string>Create new Model</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QLabel" name="outputSegmentNameLabel">
+        <property name="text">
+         <string/>
         </property>
        </widget>
       </item>

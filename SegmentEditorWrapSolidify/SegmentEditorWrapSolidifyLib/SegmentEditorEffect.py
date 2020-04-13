@@ -33,8 +33,7 @@ class SegmentEditorEffect(AbstractScriptedSegmentEditorEffect):
     return qt.QIcon()
 
   def helpText(self):
-    # TODO: adapt
-    return """<html>This Filter results in an even surface of the current segment. It is using a combination of shrinkwrapping, projection and solidification algorithms.<br>
+    return """<html>Create a solid segment from the outer surface or an internal surface of a segment. It is using a combination of shrinkwrapping, projection and solidification algorithms.<br>
     For further information, license, disclaimers and possible research partnerships visit <a href="https://github.com/sebastianandress/Slicer-SurfaceWrapSolidify">this</a> github repository.
     </html>"""
 
@@ -157,7 +156,9 @@ class SegmentEditorEffect(AbstractScriptedSegmentEditorEffect):
 
     wasBlocked = self.ui.innerSurfaceSeedSegmentSelector.blockSignals(True)
     self.ui.innerSurfaceSeedSegmentSelector.setCurrentNode(self.scriptedEffect.parameterSetNode().GetSegmentationNode())
-    self.ui.innerSurfaceSeedSegmentSelector.setCurrentSegmentID(self.scriptedEffect.parameter(ARG_INNER_SURFACE_SEED_SEGMENT_ID))
+    innerSurfaceSeedSegmentId = self.scriptedEffect.parameter(ARG_INNER_SURFACE_SEED_SEGMENT_ID)
+    if innerSurfaceSeedSegmentId:
+      self.ui.innerSurfaceSeedSegmentSelector.setCurrentSegmentID(innerSurfaceSeedSegmentId)
     self.ui.innerSurfaceSeedSegmentSelector.blockSignals(wasBlocked)
 
     wasBlocked1 = self.ui.modeOuterSurfaceRadioButton.blockSignals(True)
@@ -185,12 +186,28 @@ class SegmentEditorEffect(AbstractScriptedSegmentEditorEffect):
     self.ui.outputModelRadioButton.setChecked(outputTypeID != OUTPUT_SEGMENTATION)
     self.ui.outputSegmentationRadioButton.blockSignals(wasBlocked1)
     self.ui.outputModelRadioButton.blockSignals(wasBlocked2)
-    
-    self.ui.outputModelSelector.setCurrentNode(slicer.mrmlScene.GetNodeByID(self.scriptedEffect.parameter(ARG_OUTPUTMODELNODE)))
 
-    self.cleanup()
+    wasBlocked = self.ui.outputModelSelector.blockSignals(True)
+    self.ui.outputModelSelector.setCurrentNode(slicer.mrmlScene.GetNodeByID(self.scriptedEffect.parameter(ARG_OUTPUTMODELNODE)))
+    self.ui.outputModelSelector.blockSignals(wasBlocked)
+
+    segmentation = self.scriptedEffect.parameterSetNode().GetSegmentationNode().GetSegmentation()
+    if modeID == MODE_OUTER_SURFACE:
+      outputSegmentId = self.scriptedEffect.parameterSetNode().GetSelectedSegmentID()
+      self.ui.outputSegmentNameLabel.text = segmentation.GetSegment(outputSegmentId).GetName()
+    else:  # inner surface
+      outputSegmentId = innerSurfaceSeedSegmentId
+      if outputSegmentId == self.scriptedEffect.parameterSetNode().GetSelectedSegmentID():
+        self.ui.outputSegmentNameLabel.text = "error - seed segment cannot be the same as the current segment"
+      else:
+        self.ui.outputSegmentNameLabel.text = segmentation.GetSegment(outputSegmentId).GetName()
+
+    outputMod = slicer.mrmlScene.GetNodeByID(self.scriptedEffect.parameter(ARG_OUTPUTMODELNODE))
+
+
 
   def updateMRMLFromGUI(self):
+    wasModified = self.scriptedEffect.parameterSetNode().StartModify()
     for pId, pElement in [
         (ARG_SMOOTHINGFACTOR, self.ui.smoothingFactorSlider),
         (ARG_CAVITIESDIAMETER, self.ui.cavitiesDiameterSlider),
@@ -203,14 +220,16 @@ class SegmentEditorEffect(AbstractScriptedSegmentEditorEffect):
       self.scriptedEffect.setParameter(pId, pElement.value)
 
     self.scriptedEffect.setParameter(ARG_MODE, MODE_OUTER_SURFACE if self.ui.modeOuterSurfaceRadioButton.isChecked() else MODE_INNER_SURFACE)
-    self.scriptedEffect.setParameter(ARG_INNER_SURFACE_SEED_SEGMENT_ID, self.ui.innerSurfaceSeedSegmentSelector.currentSegmentID())
+    innerSurfaceSeedSegmentId = self.ui.innerSurfaceSeedSegmentSelector.currentSegmentID()
+    if innerSurfaceSeedSegmentId:
+      self.scriptedEffect.setParameter(ARG_INNER_SURFACE_SEED_SEGMENT_ID, innerSurfaceSeedSegmentId)
     self.scriptedEffect.setParameter(ARG_CARVECAVITIES, self.ui.cavitiesCheckBox.isChecked())
     self.scriptedEffect.setParameter(ARG_CREATESHELL, self.ui.createShellCheckBox.isChecked())
     self.scriptedEffect.setParameter(ARG_OUTPUTTYPE, OUTPUT_SEGMENTATION if self.ui.outputSegmentationRadioButton.isChecked() else OUTPUT_MODEL)
     self.scriptedEffect.parameterSetNode().SetNodeReferenceID(ARG_OUTPUTMODELNODE, self.ui.outputModelSelector.currentNodeID)
     self.scriptedEffect.setParameter(ARG_SAVEINTERMEDIATERESULTS, self.ui.saveIntermediateResultsCheckBox.isChecked())
 
-    self.cleanup()
+    self.scriptedEffect.parameterSetNode().EndModify(wasModified)
 
   #
   # Effect specific methods (the above ones are the API methods to override)
@@ -348,15 +367,15 @@ class WrapSolidifyLogic(object):
       # Get input polydata (inputPD) and input spacing
       if segmentationNode.GetSegmentation().GetMasterRepresentationName() == slicer.vtkSegmentationConverter().GetSegmentationBinaryLabelmapRepresentationName():
         # Master representation is binary labelmap
-        udpateSmoothing = False  # TODO: forced to False only for debugging
+        updateSmoothing = False  # TODO: forced to False only for debugging
         # Reconvert to closed surface using chosen chosen smoothing factor
-        if udpateSmoothing:
+        if updateSmoothing:
           originalSurfaceSmoothing = segmentationNode.GetSegmentation().GetConversionParameter(slicer.vtkBinaryLabelmapToClosedSurfaceConversionRule().GetSmoothingFactorParameterName())
           segmentationNode.GetSegmentation().SetConversionParameter(slicer.vtkBinaryLabelmapToClosedSurfaceConversionRule().GetSmoothingFactorParameterName(), str(options[ARG_SMOOTHINGFACTOR]))
           segmentationNode.RemoveClosedSurfaceRepresentation()
         segmentationNode.CreateClosedSurfaceRepresentation()
         segmentationNode.GetClosedSurfaceRepresentation(segmentID, inputPD)
-        if udpateSmoothing:
+        if updateSmoothing:
           # Restore original smoothing factor
           segmentationNode.GetSegmentation().SetConversionParameter(slicer.vtkBinaryLabelmapToClosedSurfaceConversionRule().GetSmoothingFactorParameterName(), originalSurfaceSmoothing)
           segmentationNode.RemoveClosedSurfaceRepresentation()
@@ -409,7 +428,7 @@ class WrapSolidifyLogic(object):
         seedPD = segmentationNode.GetClosedSurfaceInternalRepresentation(seedSegmentID)
         if not seedPD or seedPD.GetNumberOfPoints() == 0:
           raise ValueError("Seed segment is empty")
-        seedPD = self._remeshPolydata(seedPD, np.ones(3)*inputSpacing.mean()*5.0)  # simplify the mesh
+        #seedPD = self._remeshPolydata(seedPD, np.ones(3)*inputSpacing.mean()*5.0)  # simplify the mesh
 
       self._saveIntermediateResult("Seed", seedPD)
       cleanPolyData = vtk.vtkCleanPolyData()
@@ -420,7 +439,7 @@ class WrapSolidifyLogic(object):
       shrinkModelPD.DeepCopy(seedPD)
 
       # Carve cavities
-      spacing = np.ones(3) * inputSpacing.mean() * options[ARG_SPACING]
+      spacing = np.ones(3) * inputSpacing.mean() / options[ARG_SPACING]
       if options[ARG_CARVECAVITIES]:
         shrinkModelPD = self._carveCavities(inputPD, inputPDCellLocator, shrinkModelPD, spacing, options[ARG_MODE] == MODE_OUTER_SURFACE,
                             options[ARG_CAVITIESDIAMETER], options[ARG_CAVITIESDEPTH])
@@ -462,7 +481,12 @@ class WrapSolidifyLogic(object):
       name = segment.GetName()
       color = segment.GetColor()
       if options[ARG_OUTPUTTYPE] == OUTPUT_SEGMENTATION:
-        self._polydataToSegment(shrinkModelPD, name, color, segment, segmentationNode)
+        if options[ARG_MODE] == MODE_INNER_SURFACE:
+          # update seed from segment (that was be grown)
+          updatedSegmentID = seedSegmentID
+        else:
+          updatedSegmentID = segmentID
+        self._polydataToSegment(shrinkModelPD, segmentationNode, updatedSegmentID)
       elif options[ARG_OUTPUTTYPE] == OUTPUT_MODEL:
         self._polydataToModel(shrinkModelPD, name, color)
       else:
@@ -495,15 +519,25 @@ class WrapSolidifyLogic(object):
 
     return True
 
-  def _polydataToSegment(self, polydata, name, color, segment, segmentationNode):
-    tempSegment = vtkSegmentationCorePython.vtkSegment()
-    tempSegment.SetName(name)
-    tempSegment.SetColor(color)
-    tempSegment.AddRepresentation(vtkSegmentationCorePython.vtkSegmentationConverter.GetSegmentationClosedSurfaceRepresentationName(), polydata)
-    segment.DeepCopy(tempSegment)
-    segmentationNode.Modified()
-    segmentationNode.RemoveClosedSurfaceRepresentation()
-    segmentationNode.CreateClosedSurfaceRepresentation()
+  def _polydataToSegment(self, polydata, segmentationNode, segmentID):
+    # Get existing representations
+    segmentation = segmentationNode.GetSegmentation()
+    masterRepresentationName = segmentationNode.GetSegmentation().GetMasterRepresentationName()
+    representationNames = []
+    segmentation.GetContainedRepresentationNames(representationNames)
+    # Update
+    slicer.vtkSlicerSegmentationsModuleLogic.ClearSegment(segmentationNode, segmentID)
+    wasModified = segmentationNode.StartModify()
+    segment = segmentation.GetSegment(segmentID)
+    segment.RemoveAllRepresentations()
+    segment.AddRepresentation(vtkSegmentationCorePython.vtkSegmentationConverter.GetSegmentationClosedSurfaceRepresentationName(), polydata)
+    segmentation.CreateRepresentation(masterRepresentationName)
+    for representationName in representationNames:
+      if representationName:
+        # already converted
+        continue
+      segmentation.CreateRepresentation(representationName)
+    segmentationNode.EndModify(wasModified)
 
   def _saveIntermediateResult(self, name, polydata, color=None):
     if not self.saveIntermediateResults:
@@ -551,11 +585,10 @@ class WrapSolidifyLogic(object):
       vectorLength = np.linalg.norm(vector)
 
       if distance > 0 and vectorLength > 0.01:
-        newLocation = closestPoint - ((vector/vectorLength) * distance)
+        if distance < vectorLength:  # do not go back inside the surface if the point was too close
+          points.SetPoint(i, closestPoint - ((vector/vectorLength) * distance))
       else:
-        newLocation = closestPoint
-      
-      points.SetPoint(i, newLocation)
+        points.SetPoint(i, closestPoint)
       
     points.Modified() #polydata.SetPoints(points)
     return polydata
@@ -627,201 +660,130 @@ class WrapSolidifyLogic(object):
     smootherSinc.Update()
     return smootherSinc.GetOutput()
 
-  def _carveCavities(self, inputPD, inputPDCellLocator, shrinkModelPD, inputSpacing, shrink, cavitiesDiameter, cavitiesDepth):
+  def _carveCavities(self, inputPD, inputPDCellLocator, seedPD, inputSpacing, shrink, cavitiesDiameter, cavitiesDepth):
+    # This method expands the mesh in surface normal direction at regions where cavities are larger than the specified
+    # diameter. To determine regions where large cavities are, we compute a zero-offset and a cavitiesDiameter-offset
+    # surface. CavitiesDiameter-offset surface is "sunken" where the surface has holes larger than CavitiesDiameter,
+    # therefore the places where large holes are those where these surfaces are closer to each other than CavitiesDiameter.
 
     # Few iterations of low-resolution shrinkwrap
-
-    numberOfIterations = VAL_CARVECAVITIES_ITERATIONS
-    #spacing = inputSpacing * VAL_CARVECAVITIES_SPACING
-    # we need to be able to distinguish cavities that large because they are snapped to the edge of the cavity
-    # therefore we need to make the resampling spacing smaller than the minimum cavity diameter
-    spacing1 = cavitiesDiameter * 0.5
+    shrinkModelPD = vtk.vtkPolyData()
+    shrinkModelPD.DeepCopy(seedPD)
+    numberOfIterations = 3
+    # We need to be able to distinguish cavities that large because they are snapped to the edge of the cavity
+    # therefore we need to make the resampling spacing smaller than the minimum cavity diameter.
+    spacing1 = max(cavitiesDiameter * 0.5, min(inputSpacing))
     spacing = np.ones(3) * spacing1
-    # offset = VAL_OFFSET
     # need to get close to the surface so that the points snap to the edge of the cavity
     # and so the cavity will appear as a large cell
-    offset = cavitiesDiameter * 0.5
+    offset = cavitiesDiameter
     for iterationIndex in range(numberOfIterations):
-      if iterationIndex > 0:
-        # remesh
-        self._checkCancelRequested()
-        self._log('Carve cavities remeshing %s/%s...' %(iterationIndex+1, numberOfIterations))
-        #shrinkModelPD.DeepCopy(self._remeshPolydata(shrinkModelPD, spacing))
-        remeshedPD = self._remeshPolydata(shrinkModelPD, spacing)
-        shrinkModelPD = vtk.vtkPolyData()
-        shrinkModelPD.DeepCopy(remeshedPD)
-        self._saveIntermediateResult("CarveCavitiesRemeshed", shrinkModelPD)
       # shrink
       self._checkCancelRequested()
       self._log('Carve cavities shrinking %s/%s...' %(iterationIndex+1, numberOfIterations))
-      shrunkdPD = self._shrinkPolydata(shrinkModelPD, inputPD, inputPDCellLocator, offset)
+      if iterationIndex < 2:
+        shrunkdPD = self._shrinkPolydata(shrinkModelPD, inputPD, inputPDCellLocator, offset)
+      else:
+        shrunkdPD = self._shrinkPolydata(shrinkModelPD, inputPD, inputPDCellLocator, 0)
+      if shrunkdPD.GetNumberOfPoints() == 0:
+        # the polydata dissolved (probably spacing was too large), there are no small holes we could carve into
+        shrinkModelPD.DeepCopy(seedPD)
+        return shrinkModelPD
       shrinkModelPD = vtk.vtkPolyData()
       shrinkModelPD.DeepCopy(shrunkdPD)
       self._saveIntermediateResult("CarveCavitiesShrunken", shrinkModelPD)
+      if iterationIndex == 1:
+        shrinkModelPDWithDistance = vtk.vtkPolyData()
+        shrinkModelPDWithDistance.DeepCopy(shrinkModelPD)
+      elif iterationIndex == 2:
+        # no need to remesh, we use the carved output
+        break
+      # remesh
+      self._checkCancelRequested()
+      self._log('Carve cavities remeshing %s/%s...' %(iterationIndex+1, numberOfIterations))
+      remeshedPD = self._remeshPolydata(shrinkModelPD, spacing)
+      shrinkModelPD = vtk.vtkPolyData()
+      if remeshedPD.GetNumberOfPoints() == 0:
+        # the polydata dissolved (probably spacing was too large), there are no small holes we could carve into
+        shrinkModelPD.DeepCopy(seedPD)
+        return shrinkModelPD
+      shrinkModelPD.DeepCopy(remeshedPD)
+      self._saveIntermediateResult("CarveCavitiesRemeshed", shrinkModelPD)
 
     # Raycast
 
     self._checkCancelRequested()
     self._log('Carve cavities raycasting...')
 
-    # Find large faces and remember IDs of connected points
-    largeCellIds = vtk.vtkIdList() # IDs of cells
-    for i in range(shrinkModelPD.GetNumberOfCells()):
-      cell = shrinkModelPD.GetCell(i)
+    shrinkModelPDCellLocator = vtk.vtkCellLocator()
+    shrinkModelPDCellLocator.SetDataSet(shrinkModelPD)
+    shrinkModelPDCellLocator.BuildLocator()
 
-      # get Length longest edge of cell
-      pointsArray = list()
-      for p in range(cell.GetNumberOfPoints()):
-        pointsArray.append(np.array(cell.GetPoints().GetPoint(p)))
-
-      edgeLength = list()
-      for pa in range(len(pointsArray) - 1):
-        length = np.linalg.norm(pointsArray[pa] - pointsArray[pa + 1])
-        edgeLength.append(length)
-
-      if max(edgeLength) > cavitiesDiameter:
-        largeCellIds.InsertNextId(i)
-
+    points = shrinkModelPDWithDistance.GetPoints()
+    numberOfPoints = points.GetNumberOfPoints()
+    # Distance between convex hull and offset surface is smaller than
+    # cavitiesDiameter at holes that have larger diameter than cavitiesDiameter,
+    # (elsewhere it is approximately same as cavitiesDiameter).
+    # We set the threshold slightly (10%) lower than cavitiesDiameter to prevent
+    # false detection due to inaccuracies in distance estimation.
+    minDistance2 = pow(offset, 2) * 0.9
+    cavityPointIds = []
+    distances=[]
+    for pointId in range(numberOfPoints):
+      convexHullPoint = points.GetPoint(pointId)
+      closestPoint = [0.0, 0.0, 0.0]
+      cell = vtk.vtkGenericCell()
+      cellId = vtk.mutable(0)
+      subId = vtk.mutable(0)
+      closestPointDist2 = vtk.mutable(0)
+      shrinkModelPDCellLocator.FindClosestPoint(convexHullPoint, closestPoint, cell, cellId, subId, closestPointDist2)
+      distances.append(closestPointDist2)
+      if closestPointDist2 < minDistance2:
+        cavityPointIds.append(pointId)
 
     # Smooth to make the normals less noisy
     smoothFilter = vtk.vtkSmoothPolyDataFilter()
-    smoothFilter.SetInputData(shrinkModelPD)
+    smoothFilter.SetInputData(shrinkModelPDWithDistance)
     smoothFilter.SetRelaxationFactor(0.5)
     smoothFilter.Update()
-    shrinkModelPD = smoothFilter.GetOutput()
 
-    # extract large cells for cell point localization
+    # Generate normals
+    normals = vtk.vtkPolyDataNormals()
+    normals.ComputePointNormalsOn()
+    normals.ComputeCellNormalsOff()
+    normals.SplittingOff()
+    normals.SetInputConnection(smoothFilter.GetOutputPort())
+    #normals.AutoOrientNormalsOff()
+    normals.AutoOrientNormalsOn()
+    normals.SetFlipNormals(shrink)
+    normals.Update()
 
-    largeCellsPolyData = vtk.vtkPolyData()
-    largeCellsPolyData.DeepCopy(shrinkModelPD)
-    largeCellsPolyData.BuildLinks()
+    shrinkModelPD.DeepCopy(normals.GetOutput())
+    self._saveIntermediateResult("CarveCavitiesSmoothed", shrinkModelPD)
 
-    for c in range(largeCellsPolyData.GetNumberOfCells()):
-      if largeCellIds.IsId(c) == -1:
-        largeCellsPolyData.DeleteCell(c)
+    # projection
+    #numberOfCavityPoints = cavityPointIds.GetNumberOfIds()
+    normalArray = shrinkModelPD.GetPointData().GetArray('Normals')
+    points = shrinkModelPD.GetPoints()
+    #for cavityPointIndex in range(numberOfCavityPoints):
+    #  pointId = cavityPointIds.GetId(cavityPointIndex)
+    for pointId in cavityPointIds:
+      normal = np.array(normalArray.GetTuple(pointId))
+      vector = normal * (cavitiesDepth + offset) # max Length greater 0, checked above
+      # find intersection (point + vector) and label model
+      originalPointPos = points.GetPoint(pointId)
+      a1 = originalPointPos + vector
+      tol = 1.0
 
-    largeCellsPolyData.RemoveDeletedCells()
-
-    self._saveIntermediateResult("CarveCavitiesLargeCells", largeCellsPolyData)
-
-    # subdivide
-    ids = vtk.vtkIdFilter()
-    adapt = vtk.vtkAdaptiveSubdivisionFilter()
-    adapt.SetInputData(shrinkModelPD)
-    adapt.SetMaximumEdgeLength(cavitiesDiameter/VAL_SUBDIVISIONFRACTIONS)
-    adapt.SetMaximumTriangleArea(vtk.VTK_INT_MAX)
-    adapt.SetMaximumNumberOfPasses(vtk.VTK_INT_MAX)
-    adapt.Update()
-
-    clean = vtk.vtkCleanPolyData()
-    clean.SetInputData(adapt.GetOutput())
-    clean.Update()
-
-    shrinkModelPD.DeepCopy(clean.GetOutput())
-
-    self._checkCancelRequested()
-
-    if largeCellIds.GetNumberOfIds() > 0 and cavitiesDepth > 0.0:
-
-      # locate the points of previous large cells and write into largePointIds Set
-      largeDistance = vtk.vtkImplicitPolyDataDistance()
-      largeDistance.SetInput(largeCellsPolyData)
-
-      self._saveIntermediateResult("CarveCavitiesShrinkModel", largeCellsPolyData)
-
-      largePointIds = set()
-      for p in range(shrinkModelPD.GetNumberOfPoints()):
-        point = [0.0, 0.0, 0.0]
-        shrinkModelPD.GetPoints().GetPoint(p, point)
-        distance = largeDistance.EvaluateFunction(point)
-        if abs(distance) < spacing1:
-          largePointIds.add(p)
-
-      # generate normals
-      normals = vtk.vtkPolyDataNormals()
-      normals.ComputePointNormalsOn()
-      normals.ComputeCellNormalsOff()
-      normals.SplittingOff()
-      normals.SetInputData(shrinkModelPD)
-      normals.AutoOrientNormalsOff()
-      normals.SetFlipNormals(shrink)
-      normals.Update()
-
-      shrinkModelPD.DeepCopy(normals.GetOutput())
-    
-      # projection
-      vert_location_dict = {} # dict to save all projection results
-
-      for i in range(shrinkModelPD.GetNumberOfCells()):
-        cell = shrinkModelPD.GetCell(i)
-        pointIds = cell.GetPointIds()
-        
-        if cell.GetCellType() == 5: # cell with face
-          for p in range(pointIds.GetNumberOfIds()):
-            pointId = pointIds.GetId(p)
-
-            # check if cell with point was large before subdividion, and if point got checked already
-            if not pointId in largePointIds or ((pointId in vert_location_dict) and vert_location_dict[pointId][0] == False):
-              
-              # random False value, won't be moved
-              vert_location_dict.update({pointId:(False,np.array([0.0,0.0,0.0]),0.0)})
-
-            else:
-              cell = shrinkModelPD.GetCell(i)
-              pointId = cell.GetPointIds().GetId(p)
-              normal = np.array(shrinkModelPD.GetPointData().GetArray('Normals').GetTuple(pointId))
-              vector = normal * (cavitiesDepth + VAL_OFFSET) # max Length greater 0, checked above
-
-              points = cell.GetPoints()
-
-              # find intersection (point + vector) and label model
-              a0 = points.GetPoint(p)
-              a1 = a0 + vector
-              tol = 1.0
-
-              t = vtk.mutable(0)
-              glo = np.array([0.0,0.0,0.0]) #global
-              par = np.array([0.0,0.0,0.0]) #parametric
-              cell = vtk.vtkGenericCell()
-              cellId = vtk.mutable(0)
-              subId = vtk.mutable(0)
-              inputPDCellLocator.IntersectWithLine(a0, a1, tol, t, glo, par, subId, cellId, cell)
-
-              loc_new = np.array(glo)# - (normal * options[ARG_OFFSETFIRSTSHRINKWRAP])
-              length = np.linalg.norm(glo - a0)
-              res = False
-              if np.linalg.norm(glo) != 0:
-                res = True
-              vert_location_dict.update({pointId:(res,loc_new,length)})
-
-      numberOfPoints = shrinkModelPD.GetNumberOfPoints()
-
-      for i in range(numberOfPoints):
-        # check result
-        if vert_location_dict[i][0] == True:
-
-          shrinkModelPD.GetPoints().SetPoint(i, vert_location_dict[i][1])
-          
-          # # check distance between two new locations with positive result
-          # cellIds = vtk.vtkIdList()
-          # shrinkModelPD.GetPointCells(i, cellIds)
-          # pointChanged = False
-          # for c in range(cellIds.GetNumberOfIds()):
-          #   if pointChanged == True:
-          #     break
-          #   cell = shrinkModelPD.GetCell(cellIds.GetId(c))
-          #   pointIds = cell.GetPointIds()
-          #   for p in range(pointIds.GetNumberOfIds()):
-          #     if pointChanged == True:
-          #       break
-          #     pointId = pointIds.GetId(p)
-          #     if pointId != i and vert_location_dict[pointId][0] == True:
-          #       point = vert_location_dict[pointId][1]
-          #       distance = np.linalg.norm(-vert_location_dict[i][1] + point)
-          #       if distance < options[ARG_RAYCASTMAXHITDISTANCE]:
-          #         shrinkModelPD.GetPoints().SetPoint(i, vert_location_dict[i][1])
-          #         pointChanged = True
-
+      t = vtk.mutable(0)
+      intersectionPos = np.array([0.0,0.0,0.0]) #global
+      par = np.array([0.0,0.0,0.0]) #parametric
+      cell = vtk.vtkGenericCell()
+      cellId = vtk.mutable(0)
+      subId = vtk.mutable(0)
+      if inputPDCellLocator.IntersectWithLine(originalPointPos, a1, tol, t, intersectionPos, par, subId, cellId, cell):
+        points.SetPoint(pointId, intersectionPos[0], intersectionPos[1], intersectionPos[2])
+    points.Modified()
     self._saveIntermediateResult("CarveCavitiesResult", shrinkModelPD)
     return shrinkModelPD
 
@@ -843,7 +805,7 @@ class WrapSolidifyLogic(object):
         point = points.GetPoint(p)
         distance = implicitDistance.EvaluateFunction(point)
 
-        if abs(distance) > options[ARG_SHELLDISTANCE]:
+        if abs(distance) > shellDistance:
           nonsolidPolyData.DeleteCell(c)
           break
 
@@ -903,7 +865,7 @@ class WrapSolidifyLogic(object):
         dir_vec_norm = dir_vec / np.linalg.norm(dir_vec)
         proj_length = np.dot(dir_vec_norm, np.array(normalsArray[0]))
         dir_vec_finallenght = dir_vec_norm * proj_length
-        vertex_neu = np.array(shrinkModelPD.GetPoint(pointID)) + (dir_vec_finallenght * options[ARG_SHELLTHICKNESS])
+        vertex_neu = np.array(shrinkModelPD.GetPoint(pointID)) + (dir_vec_finallenght * shellThickness)
         
         # append point
         addingPoints.append(vertex_neu)
@@ -974,7 +936,7 @@ class WrapSolidifyLogic(object):
 ARG_MODE = 'mode'
 MODE_OUTER_SURFACE = 'outerSurface'
 MODE_INNER_SURFACE = 'innerSurface'
-DEFAULT_MODE = MODE_OUTER_SURFACE  # TODO: ignored
+DEFAULT_MODE = MODE_OUTER_SURFACE
 
 ARG_INNER_SURFACE_SEED_SEGMENT_ID = 'innerSurfaceSegmentID'
 
@@ -1008,13 +970,4 @@ DEFAULT_SPACING = 1
 ARG_SHELLDISTANCE = 'shellDistance'
 DEFAULT_SHELLDISTANCE = 0.7
 ARG_SAVEINTERMEDIATERESULTS = 'saveIntermediateResults'
-DEFAULT_SAVEINTERMEDIATERESULTS = True  # TODO: True is just for debugging
-
-# hidden options:
-VAL_CARVECAVITIES_ITERATIONS = 2
-VAL_CARVECAVITIES_SPACING = 3.0
-VAL_OFFSET = 15.0
-VAL_SUBDIVISIONFRACTIONS = 3.0
-
-
-# Add debug option: save intermediate results
+DEFAULT_SAVEINTERMEDIATERESULTS = False  # can be set to True for debugging
