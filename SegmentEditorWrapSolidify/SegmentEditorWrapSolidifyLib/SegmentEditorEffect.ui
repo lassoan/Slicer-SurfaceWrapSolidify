@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>292</width>
-    <height>385</height>
+    <height>352</height>
    </rect>
   </property>
   <layout class="QFormLayout" name="formLayout">
@@ -48,14 +48,53 @@
       <item row="0" column="0">
        <widget class="QRadioButton" name="modeOuterSurfaceRadioButton">
         <property name="text">
-         <string>Extract outer surface</string>
+         <string>Outer surface</string>
         </property>
        </widget>
       </item>
       <item row="1" column="0">
        <widget class="QRadioButton" name="modeInnerSurfaceRadioButton">
         <property name="text">
-         <string>Extract inner surface from seed:</string>
+         <string>Cavity</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="2" column="0">
+    <widget class="QLabel" name="label_7">
+     <property name="text">
+      <string>Region:</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="1">
+    <widget class="QFrame" name="frame_3">
+     <layout class="QGridLayout" name="gridLayout_7">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item row="1" column="0">
+       <widget class="QRadioButton" name="regionManualRadioButton">
+        <property name="text">
+         <string>Segment:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QRadioButton" name="regionAutoRadioButton">
+        <property name="text">
+         <string>Auto (largest cavity)</string>
         </property>
        </widget>
       </item>
@@ -69,48 +108,148 @@
      </layout>
     </widget>
    </item>
-   <item row="2" column="0">
+   <item row="3" column="0">
     <widget class="QLabel" name="label_3">
      <property name="text">
-      <string>Carve out cavities:</string>
+      <string>Extend region:</string>
      </property>
     </widget>
    </item>
-   <item row="2" column="1">
-    <widget class="QCheckBox" name="cavitiesCheckBox">
-     <property name="toolTip">
-      <string>Propagate surface deeper into concave regions</string>
+   <item row="3" column="1">
+    <widget class="QFrame" name="frame_5">
+     <property name="frameShape">
+      <enum>QFrame::NoFrame</enum>
      </property>
-     <property name="text">
-      <string/>
+     <property name="frameShadow">
+      <enum>QFrame::Plain</enum>
      </property>
+     <layout class="QHBoxLayout" name="horizontalLayout_2">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QCheckBox" name="extendRegionCheckBox">
+        <property name="toolTip">
+         <string>Propagate surface deeper into concave regions</string>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="label_15">
+        <property name="text">
+         <string>Minimum diameter:</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="qMRMLSliderWidget" name="extendMinimumDiameterSlider">
+        <property name="toolTip">
+         <string>Cavities with smaller diameter than this threshold will not be carved out.</string>
+        </property>
+        <property name="singleStep">
+         <double>0.100000000000000</double>
+        </property>
+        <property name="minimum">
+         <double>0.100000000000000</double>
+        </property>
+        <property name="maximum">
+         <double>100.000000000000000</double>
+        </property>
+        <property name="quantity">
+         <string>length</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
     </widget>
    </item>
-   <item row="5" column="0">
+   <item row="4" column="0">
     <widget class="QLabel" name="label_11">
      <property name="text">
       <string>Create shell:</string>
      </property>
     </widget>
    </item>
-   <item row="5" column="1">
-    <widget class="QCheckBox" name="createShellCheckBox">
-     <property name="toolTip">
-      <string>Hollow out the solidified object and keep only a thin outer shell.</string>
+   <item row="4" column="1">
+    <widget class="QFrame" name="frame_4">
+     <property name="frameShape">
+      <enum>QFrame::NoFrame</enum>
      </property>
-     <property name="text">
-      <string/>
+     <property name="frameShadow">
+      <enum>QFrame::Plain</enum>
      </property>
+     <layout class="QHBoxLayout" name="horizontalLayout">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QCheckBox" name="createShellCheckBox">
+        <property name="toolTip">
+         <string>Hollow out the solidified object and keep only a thin outer shell.</string>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="label_12">
+        <property name="text">
+         <string>Thickness:</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="qMRMLSliderWidget" name="shellThicknessSlider">
+        <property name="toolTip">
+         <string>Thickness of the output shell. If the value is smaller than the segmentation's resolution then the result may appear fragmented and so a model output or larger shell thickness must be chosen.</string>
+        </property>
+        <property name="singleStep">
+         <double>0.100000000000000</double>
+        </property>
+        <property name="minimum">
+         <double>0.000000000000000</double>
+        </property>
+        <property name="maximum">
+         <double>20.000000000000000</double>
+        </property>
+        <property name="quantity">
+         <string>length</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
     </widget>
    </item>
-   <item row="8" column="0">
+   <item row="5" column="0">
     <widget class="QLabel" name="label_13">
      <property name="text">
       <string>Output:</string>
      </property>
     </widget>
    </item>
-   <item row="8" column="1">
+   <item row="5" column="1">
     <widget class="QFrame" name="frame_2">
      <layout class="QGridLayout" name="gridLayout_6">
       <property name="leftMargin">
@@ -170,93 +309,18 @@
      </layout>
     </widget>
    </item>
-   <item row="9" column="0" colspan="2">
+   <item row="6" column="0" colspan="2">
     <widget class="ctkCollapsibleGroupBox" name="advancedSettingsFrame">
      <property name="title">
       <string>Advanced</string>
      </property>
      <property name="collapsed">
-      <bool>true</bool>
+      <bool>false</bool>
      </property>
      <property name="collapsedHeight">
       <number>7</number>
      </property>
      <layout class="QFormLayout" name="formLayout_2">
-      <item row="1" column="0">
-       <widget class="QLabel" name="label_5">
-        <property name="text">
-         <string>Number of iterations:</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="1">
-       <widget class="ctkSliderWidget" name="iterationsSlider">
-        <property name="toolTip">
-         <string>Increase this value if output seems not completely converged to input. Increases computation time.</string>
-        </property>
-        <property name="decimals">
-         <number>0</number>
-        </property>
-        <property name="pageStep">
-         <double>1.000000000000000</double>
-        </property>
-        <property name="minimum">
-         <double>1.000000000000000</double>
-        </property>
-        <property name="maximum">
-         <double>20.000000000000000</double>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="0">
-       <widget class="QLabel" name="label_14">
-        <property name="text">
-         <string>Remesh oversampling:</string>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="1">
-       <widget class="ctkSliderWidget" name="remeshOversamplingSlider">
-        <property name="toolTip">
-         <string>Thickness of the output shell. If the value is very small then it may significantly increase the computation time and may appear fractured if output is segmentation.</string>
-        </property>
-        <property name="singleStep">
-         <double>0.100000000000000</double>
-        </property>
-        <property name="pageStep">
-         <double>1.000000000000000</double>
-        </property>
-        <property name="minimum">
-         <double>0.100000000000000</double>
-        </property>
-        <property name="maximum">
-         <double>5.000000000000000</double>
-        </property>
-        <property name="value">
-         <double>1.000000000000000</double>
-        </property>
-        <property name="suffix">
-         <string>x</string>
-        </property>
-       </widget>
-      </item>
-      <item row="7" column="0">
-       <widget class="QLabel" name="label_6">
-        <property name="text">
-         <string>Save intermediate results:</string>
-        </property>
-       </widget>
-      </item>
-      <item row="7" column="1">
-       <widget class="QCheckBox" name="saveIntermediateResultsCheckBox">
-        <property name="toolTip">
-         <string>Save intermediate results as models. Useful for diagnostics of the solidification process.</string>
-        </property>
-        <property name="text">
-         <string>  </string>
-        </property>
-       </widget>
-      </item>
       <item row="0" column="0">
        <widget class="QLabel" name="label">
         <property name="text">
@@ -283,92 +347,40 @@
         </property>
        </widget>
       </item>
-      <item row="3" column="0">
-       <widget class="QLabel" name="label_4">
+      <item row="2" column="0">
+       <widget class="QLabel" name="label_5">
         <property name="text">
-         <string>Cavity minimum diameter:</string>
+         <string>Number of iterations:</string>
         </property>
        </widget>
       </item>
-      <item row="3" column="1">
-       <widget class="qMRMLSliderWidget" name="cavitiesDiameterSlider">
+      <item row="2" column="1">
+       <widget class="ctkSliderWidget" name="iterationsSlider">
         <property name="toolTip">
-         <string>Cavities with smaller diameter than this threshold will not be carved out.</string>
+         <string>Increase this value if output seems not completely converged to input. Increases computation time.</string>
         </property>
-        <property name="singleStep">
-         <double>0.100000000000000</double>
+        <property name="decimals">
+         <number>0</number>
+        </property>
+        <property name="pageStep">
+         <double>1.000000000000000</double>
         </property>
         <property name="minimum">
-         <double>0.100000000000000</double>
-        </property>
-        <property name="maximum">
-         <double>100.000000000000000</double>
-        </property>
-        <property name="quantity">
-         <string>length</string>
-        </property>
-       </widget>
-      </item>
-      <item row="4" column="0">
-       <widget class="QLabel" name="label_10">
-        <property name="text">
-         <string>Cavity maximum depth:</string>
-        </property>
-       </widget>
-      </item>
-      <item row="4" column="1">
-       <widget class="qMRMLSliderWidget" name="cavitiesDepthSlider">
-        <property name="toolTip">
-         <string>Cavities deeper than this threshold will not be carved out.</string>
-        </property>
-        <property name="singleStep">
-         <double>0.100000000000000</double>
-        </property>
-        <property name="minimum">
-         <double>0.100000000000000</double>
-        </property>
-        <property name="maximum">
-         <double>1000.000000000000000</double>
-        </property>
-        <property name="quantity">
-         <string>length</string>
-        </property>
-       </widget>
-      </item>
-      <item row="5" column="0">
-       <widget class="QLabel" name="label_12">
-        <property name="text">
-         <string>Shell thickness:</string>
-        </property>
-       </widget>
-      </item>
-      <item row="5" column="1">
-       <widget class="qMRMLSliderWidget" name="shellThicknessSlider">
-        <property name="toolTip">
-         <string>Thickness of the output shell. If the value is smaller than the segmentation's resolution then the result may appear fragmented and so a model output or larger shell thickness must be chosen.</string>
-        </property>
-        <property name="singleStep">
-         <double>0.100000000000000</double>
-        </property>
-        <property name="minimum">
-         <double>0.000000000000000</double>
+         <double>1.000000000000000</double>
         </property>
         <property name="maximum">
          <double>20.000000000000000</double>
         </property>
-        <property name="quantity">
-         <string>length</string>
-        </property>
        </widget>
       </item>
-      <item row="6" column="0">
+      <item row="5" column="0">
        <widget class="QLabel" name="label_16">
         <property name="text">
-         <string>Shell preserves surface cracks:</string>
+         <string>Preserve surface cracks in shell:</string>
         </property>
        </widget>
       </item>
-      <item row="6" column="1">
+      <item row="5" column="1">
        <widget class="QCheckBox" name="shellPreserveCracksCheckBox">
         <property name="toolTip">
          <string>Leaves gaps in the created shell where the original segment had surface cracks. Increase remesh oversampling if thin cracks are not preserved.</string>
@@ -378,10 +390,59 @@
         </property>
        </widget>
       </item>
+      <item row="6" column="0">
+       <widget class="QLabel" name="label_6">
+        <property name="text">
+         <string>Save intermediate results:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="6" column="1">
+       <widget class="QCheckBox" name="saveIntermediateResultsCheckBox">
+        <property name="toolTip">
+         <string>Save intermediate results as models. Useful for diagnostics of the solidification process.</string>
+        </property>
+        <property name="text">
+         <string>  </string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label_14">
+        <property name="text">
+         <string>Oversampling:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="ctkSliderWidget" name="remeshOversamplingSlider">
+        <property name="toolTip">
+         <string>Thickness of the output shell. If the value is very small then it may significantly increase the computation time and may appear fractured if output is segmentation.</string>
+        </property>
+        <property name="singleStep">
+         <double>0.100000000000000</double>
+        </property>
+        <property name="pageStep">
+         <double>1.000000000000000</double>
+        </property>
+        <property name="minimum">
+         <double>0.100000000000000</double>
+        </property>
+        <property name="maximum">
+         <double>5.000000000000000</double>
+        </property>
+        <property name="value">
+         <double>1.000000000000000</double>
+        </property>
+        <property name="suffix">
+         <string>x</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
-   <item row="10" column="0" colspan="2">
+   <item row="7" column="0" colspan="2">
     <widget class="QPushButton" name="applyButton">
      <property name="text">
       <string>Apply</string>
@@ -461,7 +522,7 @@
   <connection>
    <sender>SegmentEditorWrapSolidify</sender>
    <signal>mrmlSceneChanged(vtkMRMLScene*)</signal>
-   <receiver>cavitiesDiameterSlider</receiver>
+   <receiver>extendMinimumDiameterSlider</receiver>
    <slot>setMRMLScene(vtkMRMLScene*)</slot>
    <hints>
     <hint type="sourcelabel">
@@ -471,22 +532,6 @@
     <hint type="destinationlabel">
      <x>185</x>
      <y>87</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>SegmentEditorWrapSolidify</sender>
-   <signal>mrmlSceneChanged(vtkMRMLScene*)</signal>
-   <receiver>cavitiesDepthSlider</receiver>
-   <slot>setMRMLScene(vtkMRMLScene*)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>107</x>
-     <y>370</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>183</x>
-     <y>115</y>
     </hint>
    </hints>
   </connection>

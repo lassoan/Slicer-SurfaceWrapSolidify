@@ -14,9 +14,8 @@ class SegmentEditorEffect(AbstractScriptedSegmentEditorEffect):
     scriptedEffect.perSegment = True # this effect operates on all segments at once (not on a single selected segment)
     AbstractScriptedSegmentEditorEffect.__init__(self, scriptedEffect)
 
-    self.logic = WrapSolidifyLogic(scriptedEffect)
+    self.logic = WrapSolidifyLogic()
     self.logic.logCallback = self.addLog
-
 
   def clone(self):
     # It should not be necessary to modify this method
@@ -46,7 +45,6 @@ class SegmentEditorEffect(AbstractScriptedSegmentEditorEffect):
   def cleanup(self):
     pass
 
-
   def setupOptionsFrame(self):
 
     # Load widget from .ui file. This .ui file can be edited using Qt Designer
@@ -60,52 +58,51 @@ class SegmentEditorEffect(AbstractScriptedSegmentEditorEffect):
     # "setMRMLScene(vtkMRMLScene*)" slot.
     uiWidget.setMRMLScene(slicer.mrmlScene)
 
-    # Set defaults
-    if DEFAULT_MODE == MODE_OUTER_SURFACE:
-      self.ui.modeOuterSurfaceRadioButton.setChecked(True)
-    elif DEFAULT_MODE == MODE_INNER_SURFACE:
-      self.ui.modeInnerSurfaceRadioButton.setChecked(True)
-    self.ui.smoothingFactorSlider.value = DEFAULT_SMOOTHINGFACTOR
-    self.ui.cavitiesCheckBox.setChecked(DEFAULT_CARVECAVITIES)
-    self.ui.cavitiesDiameterSlider.value = DEFAULT_CAVITIESDIAMETER
-    self.ui.cavitiesDepthSlider.value = DEFAULT_CAVITIESDEPTH
-    self.ui.createShellCheckBox.setChecked(DEFAULT_CREATESHELL)
-    self.ui.shellPreserveCracksCheckBox.setChecked(DEFAULT_PRESERVECRACKS)
-    self.ui.saveIntermediateResultsCheckBox.setChecked(DEFAULT_SAVEINTERMEDIATERESULTS)
-
-    self.ui.shellThicknessSlider.value = DEFAULT_SHELLTHICKNESS
-    if DEFAULT_OUTPUTTYPE == OUTPUT_SEGMENTATION:
-      self.ui.outputSegmentationRadioButton.setChecked(True)
-    elif DEFAULT_OUTPUTTYPE == OUTPUT_MODEL:
-      self.ui.outputModelRadioButton.setChecked(True)
-    self.ui.iterationsSlider.value = DEFAULT_ITERATIONS
-    self.ui.remeshOversamplingSlider.value = DEFAULT_SPACING
-
-    # Add connections
-
     self.ui.modeGroup = qt.QButtonGroup()
     self.ui.modeGroup.addButton(self.ui.modeOuterSurfaceRadioButton)
     self.ui.modeGroup.addButton(self.ui.modeInnerSurfaceRadioButton)
+
+    self.ui.regionGroup = qt.QButtonGroup()
+    self.ui.regionGroup.addButton(self.ui.regionAutoRadioButton)
+    self.ui.regionGroup.addButton(self.ui.regionManualRadioButton)
 
     self.outputTypeGroup = qt.QButtonGroup()
     self.outputTypeGroup.addButton(self.ui.outputSegmentationRadioButton)
     self.outputTypeGroup.addButton(self.ui.outputModelRadioButton)
 
-    self.ui.modeGroup.connect('buttonClicked(int)', self.updateMRMLFromGUI)
-    self.ui.innerSurfaceSeedSegmentSelector.connect("currentSegmentChanged(QString)", self.updateMRMLFromGUI)
-    self.ui.smoothingFactorSlider.connect('valueChanged(double)', self.updateMRMLFromGUI)
-    self.ui.cavitiesCheckBox.connect('stateChanged(int)', self.updateMRMLFromGUI)
-    self.ui.cavitiesDiameterSlider.connect('valueChanged(double)', self.updateMRMLFromGUI)
-    self.ui.cavitiesDepthSlider.connect('valueChanged(double)', self.updateMRMLFromGUI)
-    self.ui.createShellCheckBox.connect('stateChanged(int)', self.updateMRMLFromGUI)
-    self.ui.shellPreserveCracksCheckBox.connect('stateChanged(int)', self.updateMRMLFromGUI)
-    self.ui.shellThicknessSlider.connect('valueChanged(double)', self.updateMRMLFromGUI)
-    self.outputTypeGroup.connect('buttonClicked(int)', self.updateMRMLFromGUI)
-    self.ui.outputModelSelector.connect('currentNodeChanged(vtkMRMLNode*)', self.updateMRMLFromGUI)
-    self.ui.iterationsSlider.connect('valueChanged(double)', self.updateMRMLFromGUI)    
-    self.ui.remeshOversamplingSlider.connect('valueChanged(double)', self.updateMRMLFromGUI)
+    # Widget to arguments mapping
+    self.valueEditWidgets = {
+      ARG_MODE: self.modeGroup,
+      ARG_REGION: self.regionGroup,
+      ARG_REGION_SEGMENT_ID: self.ui.regionSegmentSelector,
+      ARG_REGION_EXTEND: self.ui.extendRegionCheckBox,
+      ARG_REGION_EXTEND_DIAMETER, self.ui.regionExtendDiameterSlider,
+      ARG_CREATE_SHELL: self.ui.createShellCheckBox,
+      ARG_SHELL_THICKNESS: self.ui.shellThicknessSlider,
+      ARG_OUTPUT_TYPE: self.outputTypeGroup,
+      ARG_OUTPUT_MODEL_NODE: self.outputModelNodeSelector
+      ARG_SMOOTHING_FACTOR: self.ui.smoothingFactorSlider,
+      ARG_REMESH_OVERSAMPLING: self.ui.remeshOversamplingSlider,
+      ARG_SHRINKWRAP_ITERATIONS: self.ui.iterationsSlider,
+      ARG_SAVE_INTERMEDIATE_RESULTS: saveIntermediateResultsCheckBox
+    }
+
+    # Add connections
+
+    for argName, widget in self.valueEditWidgets.items():
+      widgetClassName = widget.metaObject().getClassName()
+      if widgetClassName=="qMRMLSliderWidget":
+        widget.connect("valueChanged(double)", self.updateMRMLFromGUI)
+      elif widgetClassName=="QCheckBox":
+        widget.connect("stateChanged(int)", self.updateMRMLFromGUI)
+      elif widgetClassName=="qMRMLNodeComboBox":
+        widget.connect("currentNodeChanged(vtkMRMLNode*)", self.updateMRMLFromGUI)
+      elif widgetClassName=="QButtonGroup":
+        widget.connect("buttonClicked(int)", self.updateMRMLFromGUI)
+      elif widgetClassName=="qMRMLSegmentSelectorWidget":
+        widget.connect("currentSegmentChanged(QString)", self.updateMRMLFromGUI)
+
     self.ui.applyButton.connect('clicked()', self.onApply)
-    self.ui.saveIntermediateResultsCheckBox.connect('stateChanged(int)', self.updateMRMLFromGUI)
 
   def createCursor(self, widget):
     return slicer.util.mainWindow().cursor
@@ -120,132 +117,82 @@ class SegmentEditorEffect(AbstractScriptedSegmentEditorEffect):
     pass # For the sake of example
 
   def setMRMLDefaults(self):
-    self.scriptedEffect.setParameterDefault(ARG_MODE, DEFAULT_MODE)
-    self.scriptedEffect.setParameterDefault(ARG_INNER_SURFACE_SEED_SEGMENT_ID, None)
-
-    self.scriptedEffect.setParameterDefault(ARG_CARVECAVITIES, DEFAULT_CARVECAVITIES)
-    self.scriptedEffect.setParameterDefault(ARG_CAVITIESDIAMETER, DEFAULT_CAVITIESDIAMETER)
-    self.scriptedEffect.setParameterDefault(ARG_CAVITIESDEPTH, DEFAULT_CAVITIESDEPTH)
-
-    self.scriptedEffect.setParameterDefault(ARG_CREATESHELL, DEFAULT_CREATESHELL)
-    self.scriptedEffect.setParameterDefault(ARG_SHELLTHICKNESS, DEFAULT_SHELLTHICKNESS)
-    self.scriptedEffect.setParameterDefault(ARG_PRESERVECRACKS, DEFAULT_PRESERVECRACKS)
-
-    self.scriptedEffect.setParameterDefault(ARG_OUTPUTTYPE, DEFAULT_OUTPUTTYPE)
-    self.scriptedEffect.setParameterDefault(ARG_SMOOTHINGFACTOR, DEFAULT_SMOOTHINGFACTOR)
-    self.scriptedEffect.parameterSetNode().SetNodeReferenceID(ARG_OUTPUTMODELNODE, None)
-    
-    self.scriptedEffect.setParameterDefault(ARG_ITERATIONS, DEFAULT_ITERATIONS)
-    self.scriptedEffect.setParameterDefault(ARG_SPACING, DEFAULT_SPACING)
-    self.scriptedEffect.setParameterDefault(ARG_SAVEINTERMEDIATERESULTS, DEFAULT_SAVEINTERMEDIATERESULTS)
+    for (argName, defaultValue) in ARG_DEFAULTS:
+      self.scriptedEffect.setParameterDefault(argName, defaultValue)
 
   def updateGUIFromMRML(self):
-    for pId, pElement in [
-        (ARG_SMOOTHINGFACTOR, self.ui.smoothingFactorSlider),
-        (ARG_CAVITIESDIAMETER, self.ui.cavitiesDiameterSlider),
-        (ARG_CAVITIESDEPTH, self.ui.cavitiesDepthSlider),
-        (ARG_SHELLTHICKNESS, self.ui.shellThicknessSlider),
-        (ARG_ITERATIONS, self.ui.iterationsSlider),
-        (ARG_SPACING, self.ui.remeshOversamplingSlider)
-      ]:
-      value = self.scriptedEffect.doubleParameter(pId)
-      wasBlocked = pElement.blockSignals(True)
-      pElement.value = value
-      pElement.blockSignals(wasBlocked)
+    parameterNode = self.getParameterNode()
+    if not parameterNode:
+      return
 
-    wasBlocked1 = self.ui.modeOuterSurfaceRadioButton.blockSignals(True)
-    wasBlocked2 = self.ui.modeInnerSurfaceRadioButton.blockSignals(True)
-    modeID = self.scriptedEffect.parameter(ARG_MODE)
-    self.ui.modeOuterSurfaceRadioButton.setChecked(modeID == MODE_OUTER_SURFACE)
-    self.ui.modeInnerSurfaceRadioButton.setChecked(modeID == MODE_INNER_SURFACE)
-    self.ui.modeOuterSurfaceRadioButton.blockSignals(wasBlocked1)
-    self.ui.modeInnerSurfaceRadioButton.blockSignals(wasBlocked2)
-    self.ui.innerSurfaceSeedSegmentSelector.enabled = (modeID == MODE_INNER_SURFACE)
+    segmentationNode = self.scriptedEffect.parameterSetNode().GetSegmentationNode().GetSegmentation()
 
-    wasBlocked = self.ui.innerSurfaceSeedSegmentSelector.blockSignals(True)
-    self.ui.innerSurfaceSeedSegmentSelector.setCurrentNode(self.scriptedEffect.parameterSetNode().GetSegmentationNode())
-    innerSurfaceSeedSegmentId = self.scriptedEffect.parameter(ARG_INNER_SURFACE_SEED_SEGMENT_ID)
-    if innerSurfaceSeedSegmentId:
-      self.ui.innerSurfaceSeedSegmentSelector.setCurrentSegmentID(innerSurfaceSeedSegmentId)
-    self.ui.innerSurfaceSeedSegmentSelector.blockSignals(wasBlocked)
-
-    wasBlocked = self.ui.cavitiesCheckBox.blockSignals(True)
-    carveCavities = self.scriptedEffect.parameter(ARG_CARVECAVITIES)=='True'
-    self.ui.cavitiesCheckBox.setChecked(carveCavities)
-    self.ui.cavitiesCheckBox.blockSignals(wasBlocked)
-    self.ui.cavitiesDiameterSlider.enabled = carveCavities
-    self.ui.cavitiesDepthSlider.enabled = carveCavities
-
-    wasBlocked = self.ui.createShellCheckBox.blockSignals(True)
-    createShell = self.scriptedEffect.parameter(ARG_CREATESHELL) == 'True'
-    self.ui.createShellCheckBox.setChecked(createShell)
-    self.ui.createShellCheckBox.blockSignals(wasBlocked)
-    self.ui.shellThicknessSlider.enabled = createShell
-    self.ui.shellPreserveCracksCheckBox.enabled = createShell
-
-    wasBlocked = self.ui.shellPreserveCracksCheckBox.blockSignals(True)
-    preserveCracks = self.scriptedEffect.parameter(ARG_PRESERVECRACKS) == 'True'
-    self.ui.shellPreserveCracksCheckBox.setChecked(preserveCracks)
-    self.ui.shellPreserveCracksCheckBox.blockSignals(wasBlocked)
-
-    wasBlocked = self.ui.saveIntermediateResultsCheckBox.blockSignals(True)
-    self.ui.saveIntermediateResultsCheckBox.setChecked(self.scriptedEffect.parameter(ARG_SAVEINTERMEDIATERESULTS)=='True')
-    self.ui.saveIntermediateResultsCheckBox.blockSignals(wasBlocked)
-
-    wasBlocked1 = self.ui.outputSegmentationRadioButton.blockSignals(True)
-    wasBlocked2 = self.ui.outputModelRadioButton.blockSignals(True)
-    outputTypeID = self.scriptedEffect.parameter(ARG_OUTPUTTYPE)
-    self.ui.outputSegmentationRadioButton.setChecked(outputTypeID == OUTPUT_SEGMENTATION)
-    self.ui.outputModelRadioButton.setChecked(outputTypeID != OUTPUT_SEGMENTATION)
-    self.ui.outputSegmentationRadioButton.blockSignals(wasBlocked1)
-    self.ui.outputModelRadioButton.blockSignals(wasBlocked2)
-
-    wasBlocked = self.ui.outputModelSelector.blockSignals(True)
-    self.ui.outputModelSelector.setCurrentNode(slicer.mrmlScene.GetNodeByID(self.scriptedEffect.parameter(ARG_OUTPUTMODELNODE)))
-    self.ui.outputModelSelector.blockSignals(wasBlocked)
-
-    segmentation = self.scriptedEffect.parameterSetNode().GetSegmentationNode().GetSegmentation()
-    if modeID == MODE_OUTER_SURFACE:
-      outputSegmentId = self.scriptedEffect.parameterSetNode().GetSelectedSegmentID()
-      self.ui.outputSegmentNameLabel.text = segmentation.GetSegment(outputSegmentId).GetName()
-    else:  # inner surface
-      outputSegmentId = innerSurfaceSeedSegmentId
-      if outputSegmentId == self.scriptedEffect.parameterSetNode().GetSelectedSegmentID():
-        self.ui.outputSegmentNameLabel.text = "error - seed segment cannot be the same as the current segment"
+    # Update values in widgets
+    for argName, widget in self.valueEditWidgets.items():
+      widgetClassName = widget.metaObject().getClassName()
+      oldBlockSignalsState = widget.blockSignals(True)
+      if widgetClassName=="qMRMLSliderWidget":
+        widget.value = self.scriptedEffect.doubleParameter(argName)
+      elif widgetClassName=="QCheckBox":
+        widget.setChecked(self.scriptedEffect.parameter(argName)=='True')
+      elif widgetClassName=="qMRMLNodeComboBox":
+        widget.setCurrentNodeID(parameterNode.GetNodeReferenceID(parameterName))
+      elif widgetClassName=="QButtonGroup":
+        optionIndex = ARG_OPTIONS[argName].index(self.scriptedEffect.parameter(argName))
+        widget.button(-2-optionIndex).setChecked(True)
+      elif widgetClassName=="qMRMLSegmentSelectorWidget":
+        segmentId = self.scriptedEffect.parameter(argName)
+        if widget.currentNode() != segmentationNode:
+          widget.setCurrentNode(segmentationNode)
+        widget.setCurrentSegmentID(segmentId)
       else:
-        self.ui.outputSegmentNameLabel.text = segmentation.GetSegment(outputSegmentId).GetName()
+        raise Exception("Unexpected widget class: {0}".format(widgetClassName))
+      widget.blockSignals(oldBlockSignalsState)
 
-    outputMod = slicer.mrmlScene.GetNodeByID(self.scriptedEffect.parameter(ARG_OUTPUTMODELNODE))
+    # Enable/disable dependent widgets
+    regionExtend = self.scriptedEffect.parameter(ARG_REGION_EXTEND)
+    self.valueEditWidgets[ARG_REGION_EXTEND_DIAMETER].enabled = regionExtend
+    createShell = self.scriptedEffect.parameter(ARG_CREATE_SHELL)
+    self.valueEditWidgets[ARG_SHELL_THICKNESS].enabled = createShell
+    self.valueEditWidgets[ARG_SHELL_PRESERVE_CRACKS].enabled = createShell
 
+    # Update output section
+    region = self.scriptedEffect.parameter(ARG_REGION)
+    if region == REGION_SEGMENT:
+      outputSegmentId = self.scriptedEffect.parameterSetNode().GetSelectedSegmentID()
+      self.ui.outputSegmentNameLabel.text = segmentationNode.GetSegment(outputSegmentId).GetName()
+    else:  # inner surface
+      outputSegmentId = self.scriptedEffect.parameter(ARG_REGION_SEGMENT_ID)
+      if outputSegmentId == self.scriptedEffect.parameterSetNode().GetSelectedSegmentID():
+        self.ui.outputSegmentNameLabel.text = "error - region segment cannot be the same as the current segment"
+      else:
+        self.ui.outputSegmentNameLabel.text = segmentationNode.GetSegment(outputSegmentId).GetName()
 
   def updateMRMLFromGUI(self):
     wasModified = self.scriptedEffect.parameterSetNode().StartModify()
-    for pId, pElement in [
-        (ARG_SMOOTHINGFACTOR, self.ui.smoothingFactorSlider),
-        (ARG_CAVITIESDIAMETER, self.ui.cavitiesDiameterSlider),
-        (ARG_CAVITIESDEPTH, self.ui.cavitiesDepthSlider),
-        (ARG_SHELLTHICKNESS, self.ui.shellThicknessSlider),
-        (ARG_ITERATIONS, self.ui.iterationsSlider),
-        (ARG_SPACING, self.ui.remeshOversamplingSlider)
-        ]:
-      self.scriptedEffect.setParameter(pId, pElement.value)
-
-    self.scriptedEffect.setParameter(ARG_MODE, MODE_OUTER_SURFACE if self.ui.modeOuterSurfaceRadioButton.isChecked() else MODE_INNER_SURFACE)
-    innerSurfaceSeedSegmentId = self.ui.innerSurfaceSeedSegmentSelector.currentSegmentID()
-    if innerSurfaceSeedSegmentId:
-      self.scriptedEffect.setParameter(ARG_INNER_SURFACE_SEED_SEGMENT_ID, innerSurfaceSeedSegmentId)
-    self.scriptedEffect.setParameter(ARG_CARVECAVITIES, self.ui.cavitiesCheckBox.isChecked())
-    self.scriptedEffect.setParameter(ARG_CREATESHELL, self.ui.createShellCheckBox.isChecked())
-    self.scriptedEffect.setParameter(ARG_PRESERVECRACKS, self.ui.shellPreserveCracksCheckBox.isChecked())
-    self.scriptedEffect.setParameter(ARG_OUTPUTTYPE, OUTPUT_SEGMENTATION if self.ui.outputSegmentationRadioButton.isChecked() else OUTPUT_MODEL)
-    self.scriptedEffect.parameterSetNode().SetNodeReferenceID(ARG_OUTPUTMODELNODE, self.ui.outputModelSelector.currentNodeID)
-    self.scriptedEffect.setParameter(ARG_SAVEINTERMEDIATERESULTS, self.ui.saveIntermediateResultsCheckBox.isChecked())
-
+    for argName, widget in self.valueEditWidgets.items():
+      widgetClassName = widget.metaObject().getClassName()
+      if widgetClassName=="qMRMLSliderWidget":
+        self.scriptedEffect.setParameter(argName, widget.value)
+      elif widgetClassName=="QCheckBox":
+        self.scriptedEffect.setParameter(argName, "True" if widget.isChecked() else "False")
+      elif widgetClassName=="qMRMLNodeComboBox":
+        self.scriptedEffect.parameterSetNode().SetNodeReferenceID(argName, widget.currentNodeID)
+      elif widgetClassName=="QButtonGroup":
+        optionName = ARG_OPTIONS[argName][-2-widget.checkedId()]
+        self.scriptedEffect.setParameter(argName, optionName)
+      elif widgetClassName=="qMRMLSegmentSelectorWidget":
+        segmentId = self.scriptedEffect.parameter(argName)
+        if widget.currentNode() != segmentationNode:
+          widget.setCurrentNode(segmentationNode)
+        widget.setCurrentSegmentID(segmentId)
+      else:
+        raise Exception("Unexpected widget class: {0}".format(widgetClassName))
     self.scriptedEffect.parameterSetNode().EndModify(wasModified)
 
-  #
-  # Effect specific methods (the above ones are the API methods to override)
-  #
+  def addLog(self, text):
+    slicer.util.showStatusMessage(text)
+    slicer.app.processEvents() # force update
 
   def onApply(self):
 
@@ -255,53 +202,66 @@ class SegmentEditorEffect(AbstractScriptedSegmentEditorEffect):
 
     self.scriptedEffect.saveStateForUndo()
 
+    errorMessage = None
     self.ui.applyButton.text = 'Cancel'
     qt.QApplication.setOverrideCursor(qt.Qt.WaitCursor)
-
-    seg = self.scriptedEffect.parameterSetNode().GetSegmentationNode()
-    segID = self.scriptedEffect.parameterSetNode().GetSelectedSegmentID()
-    modID = self.scriptedEffect.parameter(ARG_OUTPUTMODELNODE)
-    outputMod = slicer.mrmlScene.GetNodeByID(self.scriptedEffect.parameter(ARG_OUTPUTMODELNODE))
-
-    kwargs = {
-      ARG_MODE : self.scriptedEffect.parameter(ARG_MODE),
-      ARG_INNER_SURFACE_SEED_SEGMENT_ID : self.scriptedEffect.parameter(ARG_INNER_SURFACE_SEED_SEGMENT_ID),
-      ARG_CARVECAVITIES : self.scriptedEffect.parameter(ARG_CARVECAVITIES)=='True',
-      ARG_CAVITIESDIAMETER : self.scriptedEffect.doubleParameter(ARG_CAVITIESDIAMETER),
-      ARG_CAVITIESDEPTH : self.scriptedEffect.doubleParameter(ARG_CAVITIESDEPTH),
-
-      ARG_CREATESHELL : self.scriptedEffect.parameter(ARG_CREATESHELL)=='True',
-      ARG_SHELLTHICKNESS : self.scriptedEffect.doubleParameter(ARG_SHELLTHICKNESS),
-      ARG_PRESERVECRACKS: self.scriptedEffect.parameter(ARG_PRESERVECRACKS) == 'True',
-
-      ARG_OUTPUTTYPE : self.scriptedEffect.parameter(ARG_OUTPUTTYPE),
-      ARG_SMOOTHINGFACTOR : self.scriptedEffect.doubleParameter(ARG_SMOOTHINGFACTOR),
-
-      ARG_ITERATIONS : self.scriptedEffect.doubleParameter(ARG_ITERATIONS),
-      ARG_SPACING : self.scriptedEffect.doubleParameter(ARG_SPACING),
-      ARG_SAVEINTERMEDIATERESULTS : self.scriptedEffect.parameter(ARG_SAVEINTERMEDIATERESULTS)=='True'
-    }
-    
-    if not self.logic.applyWrapSolidify(seg, segID, outputMod, **kwargs):
-      slicer.util.errorDisplay("Wrap solidfy failed: " + self.logic.resultMessage)
-
-    qt.QApplication.restoreOverrideCursor()
+    try:
+      self.logic.segmentationNode = self.scriptedEffect.parameterSetNode().GetSegmentationNode()
+      self.logic.segmentId = currentSegmentId = self.scriptedEffect.parameterSetNode().GetSelectedSegmentID()
+      self.logic.mode = self.scriptedEffect.parameter(ARG_MODE)
+      self.logic.region = self.scriptedEffect.parameter(ARG_REGION)
+      self.logic.regionSegmentId = self.scriptedEffect.parameter(ARG_REGION_SEGMENT_ID)
+      self.logic.regionExtend = (self.scriptedEffect.parameter(ARG_REGION_EXTEND] == "True")
+      self.logic.regionExtendDiameter = self.scriptedEffect.doubleParameter(ARG_REGION_EXTEND_DIAMETER)
+      self.logic.createShell = (self.scriptedEffect.parameter(ARG_CREATE_SHELL] == "True")
+      self.logic.shellThickness = self.scriptedEffect.doubleParameter(ARG_SHELL_THICKNESS)
+      self.logic.shellPreserveCracks = (self.scriptedEffect.parameter(ARG_SHELL_PRESERVE_CRACKS] == "True")
+      self.logic.outputType = self.scriptedEffect.parameter(ARG_OUTPUT_TYPE)
+      self.logic.outputModelNode = self.scriptedEffect.parameterSetNode().GetNodeReferenceID(ARG_OUTPUT_MODEL_NODE)
+      self.logic.remeshOversampling = self.scriptedEffect.doubleParameter(ARG_REMESH_OVERSAMPLING)
+      self.logic.smoothingFactor = self.scriptedEffect.doubleParameter(ARG_SMOOTHINGFACTOR)
+      self.logic.shrinkwrapIterations = self.scriptedEffect.integerParameter(ARG_SHRINKWRAP_ITERATIONS)
+      self.logic.saveIntermediateResults = (self.scriptedEffect.parameter(ARG_SAVE_INTERMEDIATE_RESULTS) == "True")
+      self.logic.applyWrapSolidify():
+    except Exception as e:
+      import traceback
+      traceback.print_exc()
+      errorMessage = str(e)
     self.ui.applyButton.text = 'Apply'
-
-
-  def addLog(self, text):
-    slicer.util.showStatusMessage(text)
-    slicer.app.processEvents() # force update
-
+    qt.QApplication.restoreOverrideCursor()
+    if errorMessage:
+      slicer.util.errorDisplay("Wrap solidfy failed: " + self.logic.resultMessage)
 
 
 class WrapSolidifyLogic(object):
 
-  def __init__(self, scriptedEffect):
-    self.scriptedEffect = scriptedEffect
+  def __init__(self):
     self.logCallback = None
     self.cancelRequested = False
-  
+
+    # Inputs
+    self.segmentationNode = None
+    self.segmentId = None
+    self.mode = ARG_DEFAULTS[ARG_MODE]
+    self.region = ARG_DEFAULTS[ARG_REGION]
+    self.regionSegmentId = None
+    self.regionExtend = ARG_DEFAULTS[ARG_REGION_EXTEND]
+    self.regionExtendDiameter = ARG_DEFAULTS[ARG_REGION_EXTEND_DIAMETER]
+    self.createShell = ARG_DEFAULTS[ARG_CREATE_SHELL]
+    self.shellThickness = ARG_DEFAULTS[ARG_SHELL_THICKNESS]
+    self.shellPreserveCracks = ARG_DEFAULTS[ARG_SHELL_PRESERVE_CRACKS]
+    self.outputType = ARG_DEFAULTS[ARG_OUTPUT_TYPE]
+    self.outputModelNode = None
+    self.remeshOversampling = ARG_DEFAULTS[ARG_REMESH_OVERSAMPLING]
+    self.smoothingFactor = ARG_DEFAULTS[ARG_SMOOTHINGFACTOR]
+    self.shrinkwrapIterations = ARG_DEFAULTS[ARG_SHRINKWRAP_ITERATIONS]
+    self.saveIntermediateResults = ARG_DEFAULTS[ARG_SAVE_INTERMEDIATE_RESULTS]
+
+    # Temporary variables
+    self._inputPd = None
+    self._inputPdCellLocator = None
+    self._inputSpacing = None
+
   def requestCancel(self):
     logging.info("User requested cancelling.")
     self.cancelRequested = True
@@ -315,154 +275,25 @@ class WrapSolidifyLogic(object):
       self.checkCancelRequested = False
       raise ValueError("Cancel requested")
 
-  def applyWrapSolidify(self, segmentationNode, segmentID, modelNode=None, **kwargs):
+  def applyWrapSolidify(self):
     """Applies the Shrinkwrap-Raycast-Shrinkwrap Filter, a surface filter, to the selected passed segment.
-    
-    Arguments:
-        segmentationNode (vtkMRMLSegmentationNode): Segmentation Node the filter gets applied to.
-        segmentID (string): ID of the Segment the filter gets applied to. WARNING: The filter replaces the former segmentation.
-        modelNode (vtkMRMLModelNode): If 'MODEL' is selected as outputType, the polydata of this node gets updated.
-        **mode (string): outerSurface, innerSurface
-        **outputType (string): Possible options: 'MODEL', 'SEGMENTATION'
-        **smoothingFactor (double): 0-1, Smoothing of the surface representation of the input used by this filter. This factor is also used on the output surface model and segmentation.
-        **carveCavities (bool): Solidification process also carves out deeper caves.
-        **cavitiesDiameter (double): 0.1-100, Entrance diameter of caves. Only used if carveCavities == True.
-        **cavitiesDepth (double): 0.1-1000, Depth of caves. Only used if carveCavities == True.
-        **createShell (bool): Whether or not the solidification will be done only for a outer shell.
-        **preserveCracks (bool): Add gaps where the input surface has cracks.
-        **shellThickness (-0.1-10): Thickness of the shell. Only used if createShell == True. WARNING: If <0, a nonmanifold mesh gets created, Segmentation will fail.
-        **iterationsNr (1-20): Nr. of iterations of the shrinkwrap process.
-        **spacing (>0.1): Spacing of remesh process. 1.0 means remesh at current resolution
-    Returns:
-        bool: return True on success.
     """
-
     self.cancelRequested = False
-    self.segLogic = slicer.vtkSlicerSegmentationsModuleLogic
-    self.modelsLogic = slicer.modules.models.logic()
 
-    options = {
-      ARG_MODE : DEFAULT_MODE,
-
-      ARG_OUTPUTTYPE : DEFAULT_OUTPUTTYPE,
-      ARG_SMOOTHINGFACTOR : DEFAULT_SMOOTHINGFACTOR,
-
-      ARG_CARVECAVITIES : DEFAULT_CARVECAVITIES,
-      ARG_CAVITIESDIAMETER : DEFAULT_CAVITIESDIAMETER,
-      ARG_CAVITIESDEPTH : DEFAULT_CAVITIESDEPTH,
-
-      ARG_CREATESHELL : DEFAULT_CREATESHELL,
-      ARG_SHELLTHICKNESS : DEFAULT_SHELLTHICKNESS,
-      ARG_PRESERVECRACKS: DEFAULT_PRESERVECRACKS,
-
-      ARG_ITERATIONS : DEFAULT_ITERATIONS,
-      ARG_SPACING : DEFAULT_SPACING,
-      ARG_SAVEINTERMEDIATERESULTS : DEFAULT_SAVEINTERMEDIATERESULTS
-      }
-
-    options.update(kwargs)
-
-    self.saveIntermediateResults = options[ARG_SAVEINTERMEDIATERESULTS]
     self.intermediateResultCounter = 0
     self.previousIntermediateResult = None
-    success = True
-    self.resultMessage = ""
 
     try:
       self._log('Initializing Filtering Process...')
 
-      segment = segmentationNode.GetSegmentation().GetSegment(segmentID)
-      inputPD = vtk.vtkPolyData()
+      self._updateInputPd()
+      regionPd = self._getInitialRegionPd()
 
-      # Get input polydata (inputPD) and input spacing
-      if segmentationNode.GetSegmentation().GetMasterRepresentationName() == slicer.vtkSegmentationConverter().GetSegmentationBinaryLabelmapRepresentationName():
-        # Master representation is binary labelmap
-        # Reconvert to closed surface using chosen chosen smoothing factor
-        originalSurfaceSmoothing = float(segmentationNode.GetSegmentation().GetConversionParameter(slicer.vtkBinaryLabelmapToClosedSurfaceConversionRule().GetSmoothingFactorParameterName()))
-        if abs(originalSurfaceSmoothing-options[ARG_SMOOTHINGFACTOR]) > 0.001:
-          segmentationNode.GetSegmentation().SetConversionParameter(slicer.vtkBinaryLabelmapToClosedSurfaceConversionRule().GetSmoothingFactorParameterName(), str(options[ARG_SMOOTHINGFACTOR]))
-          segmentationNode.RemoveClosedSurfaceRepresentation()
-          segmentationNode.CreateClosedSurfaceRepresentation()
-        segmentationNode.GetClosedSurfaceRepresentation(segmentID, inputPD)
-        # Get input spacing
-        inputLabelmap = slicer.vtkOrientedImageData()
-        segmentationNode.GetBinaryLabelmapRepresentation(segmentID, inputLabelmap)
-        inputSpacing = math.sqrt(np.sum(np.array(inputLabelmap.GetSpacing())**2))
-      else:
-        # Representation is already closed surface
-        segmentationNode.CreateClosedSurfaceRepresentation()
-        segmentationNode.GetClosedSurfaceRepresentation(segmentID, inputPD)
-        # set spacing to have an approxmately 250^3 volume
-        # this size is not too large for average computing hardware yet
-        # it is sufficiently detailed for many applications
-        preferredVolumeSizeInVoxels = 250 * 250 * 250
-        bounds = np.zeros(6)
-        inputPD.GetBounds(bounds)
-        volumeSizeInMm3 = (bounds[1] - bounds[0]) * (bounds[3] - bounds[2]) * (bounds[5] - bounds[4])
-        inputSpacing = pow(volumeSizeInMm3 / preferredVolumeSizeInVoxels, 1 / 3.)
+      # TODO: implement this
+      # if self.regionExtendDiameter:
+      #   regionPd = self._extendRegion(regionPd)
 
-      inputPDCellLocator = vtk.vtkCellLocator()
-      inputPDCellLocator.SetDataSet(inputPD)
-      inputPDCellLocator.BuildLocator()
-      self.outputModel = modelNode
-
-      # Get seed polydata (seedPD)
-      if options[ARG_MODE] == MODE_OUTER_SURFACE:
-        # create sphere as seed (that will be shrunken)
-        bounds = np.zeros(6)
-        inputPD.GetBounds(bounds)
-        diameters = np.array([bounds[1]-bounds[0],bounds[3]-bounds[2],bounds[5]-bounds[4]])
-        maxRadius = max(diameters)/2.0
-        sphereSource = vtk.vtkSphereSource()
-        # to make sure the volume is fully included in the sphere, radius must be sqrt(2) times larger
-        sphereSource.SetRadius(maxRadius*1.5)
-        sphereSource.SetPhiResolution(max(int(maxRadius/5), 10))
-        sphereSource.SetThetaResolution(max(int(maxRadius/5), 10))
-        sphereSource.SetCenter((bounds[0]+bounds[1])/2.0, (bounds[2]+bounds[3])/2.0, (bounds[4]+bounds[5])/2.0)
-        sphereSource.Update()
-        seedPD = sphereSource.GetOutput()
-      elif options[ARG_MODE] == MODE_INNER_SURFACE:
-        # create seed from segment (that will be grown)
-        seedSegmentID = options[ARG_INNER_SURFACE_SEED_SEGMENT_ID]
-        if not seedSegmentID:
-          raise ValueError("Seed segment is not set")
-        if seedSegmentID == segmentID:
-          raise ValueError("Seed segment cannot be the same as the solidified segment")
-        seedPD = segmentationNode.GetClosedSurfaceInternalRepresentation(seedSegmentID)
-        if not seedPD or seedPD.GetNumberOfPoints() == 0:
-          raise ValueError("Seed segment is empty")
-        #seedPD = self._remeshPolydata(seedPD, inputSpacing*5.0)  # simplify the mesh
-
-      self._saveIntermediateResult("Seed", seedPD)
-      cleanPolyData = vtk.vtkCleanPolyData()
-      cleanPolyData.SetInputData(seedPD)
-      cleanPolyData.Update()
-
-      shrinkModelPD = vtk.vtkPolyData()
-      shrinkModelPD.DeepCopy(seedPD)
-
-      # Carve cavities
-      spacing = inputSpacing / options[ARG_SPACING]
-      if options[ARG_CARVECAVITIES]:
-        shrinkModelPD = self._carveCavities(inputPD, inputPDCellLocator, shrinkModelPD, spacing, options[ARG_MODE] == MODE_OUTER_SURFACE,
-                            options[ARG_CAVITIESDIAMETER], options[ARG_CAVITIESDEPTH])
-
-      # Main shrinkwrap loop
-      numberOfIterations = int(options[ARG_ITERATIONS])
-      for iterationIndex in range(numberOfIterations):
-        # shrink
-        self._checkCancelRequested()
-        self._log('Shrinking %s/%s...' %(iterationIndex+1, numberOfIterations))
-        shrinkModelPD.DeepCopy(self._shrinkPolydata(shrinkModelPD, inputPD, inputPDCellLocator))
-        self._saveIntermediateResult("Shrunken", shrinkModelPD)
-        # remesh
-        self._checkCancelRequested()
-        self._log('Remeshing %s/%s...' %(iterationIndex+1, numberOfIterations))
-        remeshedPD = self._remeshPolydata(shrinkModelPD, spacing)
-        shrinkModelPD = vtk.vtkPolyData()
-        shrinkModelPD.DeepCopy(remeshedPD)
-
-        self._saveIntermediateResult("Remeshed", shrinkModelPD)
+      shrunkenPd = self._shrinkWrap(regionPd)
 
       self._log('Smoothing...')
       shrinkModelPD.DeepCopy(self._smoothPolydata(shrinkModelPD, options[ARG_SMOOTHINGFACTOR]))
@@ -497,24 +328,117 @@ class WrapSolidifyLogic(object):
       else:
         raise ValueError('Unknown Output Type')
 
-    except Exception as e:
-      import traceback
-      traceback.print_exc()
-      self.resultMessage = str(e)
-      success = False
     finally:
       self._cleanup()
 
-    return success
 
   def _cleanup(self):
     if self.previousIntermediateResult:
       self.previousIntermediateResult.GetDisplayNode().SetVisibility(False)
     self._log('')
 
+  def _updateInputPd(self):
+
+    segment = self.segmentationNode.GetSegmentation().GetSegment(self.segmentId)
+    self._inputPd = vtk.vtkPolyData()
+
+    # Get input polydata (inputPD) and input spacing
+    if self.segmentationNode.GetSegmentation().GetMasterRepresentationName() == slicer.vtkSegmentationConverter().GetSegmentationBinaryLabelmapRepresentationName():
+      # Master representation is binary labelmap
+      # Reconvert to closed surface using chosen chosen smoothing factor
+      originalSurfaceSmoothing = float(self.segmentationNode.GetSegmentation().GetConversionParameter(
+        slicer.vtkBinaryLabelmapToClosedSurfaceConversionRule().GetSmoothingFactorParameterName()))
+      if abs(originalSurfaceSmoothing-options[ARG_SMOOTHINGFACTOR]) > 0.001:
+        self.segmentationNode.GetSegmentation().SetConversionParameter(
+          slicer.vtkBinaryLabelmapToClosedSurfaceConversionRule().GetSmoothingFactorParameterName(), str(options[ARG_SMOOTHINGFACTOR]))
+        self.segmentationNode.RemoveClosedSurfaceRepresentation()
+        self.segmentationNode.CreateClosedSurfaceRepresentation()
+      self.segmentationNode.GetClosedSurfaceRepresentation(segmentID, inputPD)
+      # Get input spacing
+      inputLabelmap = slicer.vtkOrientedImageData()
+      self.segmentationNode.GetBinaryLabelmapRepresentation(segmentID, inputLabelmap)
+      self._inputSpacing = math.sqrt(np.sum(np.array(inputLabelmap.GetSpacing())**2))
+    else:
+      # Representation is already closed surface
+      self.segmentationNode.CreateClosedSurfaceRepresentation()
+      self.segmentationNode.GetClosedSurfaceRepresentation(segmentID, inputPD)
+      # set spacing to have an approxmately 250^3 volume
+      # this size is not too large for average computing hardware yet
+      # it is sufficiently detailed for many applications
+      preferredVolumeSizeInVoxels = 250 * 250 * 250
+      bounds = np.zeros(6)
+      inputPD.GetBounds(bounds)
+      volumeSizeInMm3 = (bounds[1] - bounds[0]) * (bounds[3] - bounds[2]) * (bounds[5] - bounds[4])
+      self._inputSpacing = pow(volumeSizeInMm3 / preferredVolumeSizeInVoxels, 1 / 3.)
+
+    self._inputPdCellLocator = vtk.vtkCellLocator()
+    self._inputPdCellLocator.SetDataSet(inputPD)
+    self._inputPdCellLocator.BuildLocator()
+
+
+  def _getInitialRegionPd(self):
+
+    # Get seed polydata (seedPD)
+    if self.region == REGION_LARGEST:
+      # TODO: implement largest cavity find
+      # create sphere as seed (that will be shrunken)
+      bounds = np.zeros(6)
+      inputPD.GetBounds(bounds)
+      diameters = np.array([bounds[1]-bounds[0],bounds[3]-bounds[2],bounds[5]-bounds[4]])
+      maxRadius = max(diameters)/2.0
+      sphereSource = vtk.vtkSphereSource()
+      # to make sure the volume is fully included in the sphere, radius must be sqrt(2) times larger
+      sphereSource.SetRadius(maxRadius*1.5)
+      sphereSource.SetPhiResolution(max(int(maxRadius/5), 10))
+      sphereSource.SetThetaResolution(max(int(maxRadius/5), 10))
+      sphereSource.SetCenter((bounds[0]+bounds[1])/2.0, (bounds[2]+bounds[3])/2.0, (bounds[4]+bounds[5])/2.0)
+      sphereSource.Update()
+      initialRegionPd = sphereSource.GetOutput()
+    elif self.region == REGION_SEGMENT:
+      # create seed from segment (that will be grown)
+      if not self.regionSegmentId:
+        raise ValueError("Seed segment is not set")
+      if self.regionSegmentId == self.segmentId:
+        raise ValueError("Seed segment cannot be the same as the solidified segment")
+      initialRegionPd = segmentationNode.GetClosedSurfaceInternalRepresentation(seedSegmentID)
+      if not initialRegionPd or initialRegionPd.GetNumberOfPoints() == 0:
+        raise ValueError("Region segment is empty")
+      #seedPD = self._remeshPolydata(seedPD, inputSpacing*5.0)  # simplify the mesh
+
+    cleanPolyData = vtk.vtkCleanPolyData()
+    cleanPolyData.SetInputData(initialRegionPd)
+    cleanPolyData.Update()
+    initialRegionPd = cleanPolyData.GetOutput()
+
+    self._saveIntermediateResult("InitialRegion", initialRegionPd)
+    return initialRegionPd
+
+
+  def _shrinkWrap(self, regionPd)
+
+    spacing = self.inputSpacing / self.oversampling
+
+    # Main shrinkwrap loop
+    for iterationIndex in range(self.shrinkwrapIterations):
+      # shrink
+      self._checkCancelRequested()
+      self._log('Shrinking %s/%s...' %(iterationIndex+1, shrinkwrapIterations))
+      shrinkModelPD.DeepCopy(self._shrinkPolydata(shrinkModelPD, inputPD, inputPDCellLocator))
+      self._saveIntermediateResult("Shrunken", shrinkModelPD)
+      # remesh
+      self._checkCancelRequested()
+      self._log('Remeshing %s/%s...' %(iterationIndex+1, shrinkwrapIterations))
+      remeshedPD = self._remeshPolydata(shrinkModelPD, spacing)
+      shrinkModelPD = vtk.vtkPolyData()
+      shrinkModelPD.DeepCopy(remeshedPD)
+
+      self._saveIntermediateResult("Remeshed", shrinkModelPD)
+      shrunkenPd
+
+
   def _polydataToModel(self, polydata, name, color):
     if not self.outputModel:
-      self.outputModel = self.modelsLogic.AddModel(polydata)
+      self.outputModel = slicer.modules.models.logic().AddModel(polydata)
       self.outputModel.SetName(name)
       self.outputModel.GetDisplayNode().SliceIntersectionVisibilityOn()
     else:
@@ -554,7 +478,7 @@ class WrapSolidifyLogic(object):
 
     polyDataCopy = vtk.vtkPolyData()
     polyDataCopy.DeepCopy(polydata)
-    outputModel = self.modelsLogic.AddModel(polyDataCopy)
+    outputModel = slicer.modules.models.logic().AddModel(polyDataCopy)
     outputModel.SetName("WrapSolidify-{0}-{1}".format(self.intermediateResultCounter, name))
     self.intermediateResultCounter += 1
     outputModel.GetDisplayNode().SliceIntersectionVisibilityOn()
@@ -675,135 +599,147 @@ class WrapSolidifyLogic(object):
     # Few iterations of low-resolution shrinkwrap
     shrinkModelPD = vtk.vtkPolyData()
     shrinkModelPD.DeepCopy(seedPD)
-    numberOfIterations = 3
-    # We need to be able to distinguish cavities that large because they are snapped to the edge of the cavity
-    # therefore we need to make the resampling spacing smaller than the minimum cavity diameter.
-    spacing = max(cavitiesDiameter * 0.5, inputSpacing)
-    # need to get close to the surface so that the points snap to the edge of the cavity
-    # and so the cavity will appear as a large cell
-    offset = cavitiesDiameter
-    for iterationIndex in range(numberOfIterations):
-      # shrink
+
+    for mainIteration in range(15):
+
+      numberOfIterations = 3
+      # We need to be able to distinguish cavities that large because they are snapped to the edge of the cavity
+      # therefore we need to make the resampling spacing smaller than the minimum cavity diameter.
+      spacing = max(cavitiesDiameter * 0.5, inputSpacing)
+      # need to get close to the surface so that the points snap to the edge of the cavity
+      # and so the cavity will appear as a large cell
+      offset = cavitiesDiameter
+      for iterationIndex in range(numberOfIterations):
+        # shrink
+        self._checkCancelRequested()
+        self._log('Carve cavities shrinking %s/%s...' %(iterationIndex+1, numberOfIterations))
+        if iterationIndex < 2:
+          shrunkdPD = self._shrinkPolydata(shrinkModelPD, inputPD, inputPDCellLocator, offset)
+        else:
+          shrunkdPD = self._shrinkPolydata(shrinkModelPD, inputPD, inputPDCellLocator, 0)
+        if shrunkdPD.GetNumberOfPoints() == 0:
+          # the polydata dissolved (probably spacing was too large), there are no small holes we could carve into
+          shrinkModelPD.DeepCopy(seedPD)
+          return shrinkModelPD
+        shrinkModelPD = vtk.vtkPolyData()
+        shrinkModelPD.DeepCopy(shrunkdPD)
+        self._saveIntermediateResult("CarveCavitiesShrunken", shrinkModelPD)
+        if iterationIndex == 1:
+          shrinkModelPDWithDistance = vtk.vtkPolyData()
+          shrinkModelPDWithDistance.DeepCopy(shrinkModelPD)
+        elif iterationIndex == 2:
+          # no need to remesh, we use the carved output
+          break
+        # remesh
+        self._checkCancelRequested()
+        self._log('Carve cavities remeshing %s/%s...' %(iterationIndex+1, numberOfIterations))
+        remeshedPD = self._remeshPolydata(shrinkModelPD, spacing)
+        shrinkModelPD = vtk.vtkPolyData()
+        if remeshedPD.GetNumberOfPoints() == 0:
+          # the polydata dissolved (probably spacing was too large), there are no small holes we could carve into
+          shrinkModelPD.DeepCopy(seedPD)
+          return shrinkModelPD
+        shrinkModelPD.DeepCopy(remeshedPD)
+        self._saveIntermediateResult("CarveCavitiesRemeshed", shrinkModelPD)
+
+      # Raycast
+
       self._checkCancelRequested()
-      self._log('Carve cavities shrinking %s/%s...' %(iterationIndex+1, numberOfIterations))
-      if iterationIndex < 2:
-        shrunkdPD = self._shrinkPolydata(shrinkModelPD, inputPD, inputPDCellLocator, offset)
-      else:
-        shrunkdPD = self._shrinkPolydata(shrinkModelPD, inputPD, inputPDCellLocator, 0)
-      if shrunkdPD.GetNumberOfPoints() == 0:
-        # the polydata dissolved (probably spacing was too large), there are no small holes we could carve into
-        shrinkModelPD.DeepCopy(seedPD)
-        return shrinkModelPD
-      shrinkModelPD = vtk.vtkPolyData()
-      shrinkModelPD.DeepCopy(shrunkdPD)
-      self._saveIntermediateResult("CarveCavitiesShrunken", shrinkModelPD)
-      if iterationIndex == 1:
-        shrinkModelPDWithDistance = vtk.vtkPolyData()
-        shrinkModelPDWithDistance.DeepCopy(shrinkModelPD)
-      elif iterationIndex == 2:
-        # no need to remesh, we use the carved output
-        break
-      # remesh
-      self._checkCancelRequested()
-      self._log('Carve cavities remeshing %s/%s...' %(iterationIndex+1, numberOfIterations))
-      remeshedPD = self._remeshPolydata(shrinkModelPD, spacing)
-      shrinkModelPD = vtk.vtkPolyData()
-      if remeshedPD.GetNumberOfPoints() == 0:
-        # the polydata dissolved (probably spacing was too large), there are no small holes we could carve into
-        shrinkModelPD.DeepCopy(seedPD)
-        return shrinkModelPD
-      shrinkModelPD.DeepCopy(remeshedPD)
-      self._saveIntermediateResult("CarveCavitiesRemeshed", shrinkModelPD)
+      self._log('Carve cavities raycasting...')
 
-    # Raycast
+      shrinkModelPDCellLocator = vtk.vtkCellLocator()
+      shrinkModelPDCellLocator.SetDataSet(shrinkModelPD)
+      shrinkModelPDCellLocator.BuildLocator()
 
-    self._checkCancelRequested()
-    self._log('Carve cavities raycasting...')
-
-    shrinkModelPDCellLocator = vtk.vtkCellLocator()
-    shrinkModelPDCellLocator.SetDataSet(shrinkModelPD)
-    shrinkModelPDCellLocator.BuildLocator()
-
-    points = shrinkModelPDWithDistance.GetPoints()
-    numberOfPoints = points.GetNumberOfPoints()
-    # Distance between convex hull and offset surface is smaller than
-    # cavitiesDiameter at holes that have larger diameter than cavitiesDiameter,
-    # (elsewhere it is approximately same as cavitiesDiameter).
-    # We set the threshold slightly (10%) lower than cavitiesDiameter to prevent
-    # false detection due to inaccuracies in distance estimation.
-    minDistance2 = pow(offset, 2) * 0.9
-    cavityPointIds = []
-    distances=[]
-    for pointId in range(numberOfPoints):
-      convexHullPoint = points.GetPoint(pointId)
-      closestPoint = [0.0, 0.0, 0.0]
-      cell = vtk.vtkGenericCell()
-      cellId = vtk.mutable(0)
-      subId = vtk.mutable(0)
-      closestPointDist2 = vtk.mutable(0)
-      shrinkModelPDCellLocator.FindClosestPoint(convexHullPoint, closestPoint, cell, cellId, subId, closestPointDist2)
-      distances.append(closestPointDist2)
-      if closestPointDist2 < minDistance2:
+      points = shrinkModelPDWithDistance.GetPoints()
+      numberOfPoints = points.GetNumberOfPoints()
+      # Distance between convex hull and offset surface is smaller than
+      # cavitiesDiameter at holes that have larger diameter than cavitiesDiameter,
+      # (elsewhere it is approximately same as cavitiesDiameter).
+      # We set the threshold slightly (10%) lower than cavitiesDiameter to prevent
+      # false detection due to inaccuracies in distance estimation.
+      minDistance2 = pow(offset, 2) * 0.9
+      cavityPointIds = []
+      distances=[]
+      for pointId in range(numberOfPoints):
+        convexHullPoint = points.GetPoint(pointId)
+        closestPoint = [0.0, 0.0, 0.0]
+        cell = vtk.vtkGenericCell()
+        cellId = vtk.mutable(0)
+        subId = vtk.mutable(0)
+        closestPointDist2 = vtk.mutable(0)
+        shrinkModelPDCellLocator.FindClosestPoint(convexHullPoint, closestPoint, cell, cellId, subId, closestPointDist2)
+        distances.append(closestPointDist2)
+        #if closestPointDist2 < minDistance2:
         cavityPointIds.append(pointId)
 
-    # Smooth to make the normals less noisy
-    smoothFilter = vtk.vtkSmoothPolyDataFilter()
-    smoothFilter.SetInputData(shrinkModelPDWithDistance)
-    smoothFilter.SetRelaxationFactor(0.3)
-    smoothFilter.Update()
+      # Smooth to make the normals less noisy
+      smoothFilter = vtk.vtkSmoothPolyDataFilter()
+      smoothFilter.SetInputData(shrinkModelPDWithDistance)
+      smoothFilter.SetRelaxationFactor(0.1)
+      smoothFilter.Update()
 
-    # Generate normals
-    normals = vtk.vtkPolyDataNormals()
-    normals.ComputePointNormalsOn()
-    normals.ComputeCellNormalsOff()
-    normals.SplittingOff()
-    normals.SetInputConnection(smoothFilter.GetOutputPort())
-    normals.AutoOrientNormalsOn()
-    normals.SetFlipNormals(shrink)
-    normals.Update()
+      # Generate normals
+      normals = vtk.vtkPolyDataNormals()
+      normals.ComputePointNormalsOn()
+      normals.ComputeCellNormalsOff()
+      normals.SplittingOff()
+      normals.SetInputConnection(smoothFilter.GetOutputPort())
+      normals.AutoOrientNormalsOn()
+      normals.SetFlipNormals(shrink)
+      normals.Update()
 
-    if shrink:
-      # smoothing reduces surface mesh size - expand it by 20% to compensate for that
-      # (to prevent clipping of extruding sharp edges)
-      expand = vtk.vtkWarpVector()
-      expand.SetInputConnection(normals.GetOutputPort())
-      expand.SetInputArrayToProcess(0, 0, 0,
-        vtk.vtkDataObject.FIELD_ASSOCIATION_POINTS, vtk.vtkDataSetAttributes.NORMALS)
-      bounds = np.zeros(6)
-      shrinkModelPDWithDistance.GetBounds(bounds)
-      maxDiameter = max([bounds[1] - bounds[0], bounds[3] - bounds[2], bounds[5] - bounds[4]])
-      expand.SetScaleFactor(-maxDiameter * 0.1)  # 20% extrusion
-      expand.Update()
-      shrinkModelPD.DeepCopy(expand.GetOutput())
-      shrinkModelPD.GetPointData().AddArray(normals.GetOutput().GetPointData().GetArray("Normals"))
-    else:
-      shrinkModelPD.DeepCopy(normals.GetOutput())
-    self._saveIntermediateResult("CarveCavitiesSmoothed", shrinkModelPD)
+      if shrink:
+        # smoothing reduces surface mesh size - expand it by 20% to compensate for that
+        # (to prevent clipping of extruding sharp edges)
+        expand = vtk.vtkWarpVector()
+        expand.SetInputConnection(normals.GetOutputPort())
+        expand.SetInputArrayToProcess(0, 0, 0,
+          vtk.vtkDataObject.FIELD_ASSOCIATION_POINTS, vtk.vtkDataSetAttributes.NORMALS)
+        bounds = np.zeros(6)
+        shrinkModelPDWithDistance.GetBounds(bounds)
+        maxDiameter = max([bounds[1] - bounds[0], bounds[3] - bounds[2], bounds[5] - bounds[4]])
+        maxDiameter = 0
+        expand.SetScaleFactor(-maxDiameter * 0.1)  # 20% extrusion
+        expand.Update()
+        shrinkModelPD.DeepCopy(expand.GetOutput())
+        shrinkModelPD.GetPointData().AddArray(normals.GetOutput().GetPointData().GetArray("Normals"))
+      else:
+        shrinkModelPD.DeepCopy(normals.GetOutput())
+      self._saveIntermediateResult("CarveCavitiesSmoothed", shrinkModelPD)
 
-    # projection
-    #numberOfCavityPoints = cavityPointIds.GetNumberOfIds()
-    normalArray = shrinkModelPD.GetPointData().GetArray('Normals')
-    points = shrinkModelPD.GetPoints()
-    #for cavityPointIndex in range(numberOfCavityPoints):
-    #  pointId = cavityPointIds.GetId(cavityPointIndex)
-    for pointId in cavityPointIds:
-      normal = np.array(normalArray.GetTuple(pointId))
-      vector = normal * (cavitiesDepth + offset) # max Length greater 0, checked above
-      # find intersection (point + vector) and label model
-      originalPointPos = points.GetPoint(pointId)
-      a1 = originalPointPos + vector
-      tol = 1.0
+      # projection
+      #numberOfCavityPoints = cavityPointIds.GetNumberOfIds()
+      normalArray = shrinkModelPD.GetPointData().GetArray('Normals')
+      points = shrinkModelPD.GetPoints()
+      #for cavityPointIndex in range(numberOfCavityPoints):
+      #  pointId = cavityPointIds.GetId(cavityPointIndex)
+      minParametricDistance = offset / (cavitiesDepth + offset)
+      for pointId in cavityPointIds:
+        normal = np.array(normalArray.GetTuple(pointId))
+        vector = normal * (cavitiesDepth + offset) # max Length greater 0, checked above
+        # find intersection (point + vector) and label model
+        originalPointPos = points.GetPoint(pointId)
+        a1 = originalPointPos + vector
+        tol = 1.0
 
-      t = vtk.mutable(0)
-      intersectionPos = np.array([0.0,0.0,0.0]) #global
-      par = np.array([0.0,0.0,0.0]) #parametric
-      cell = vtk.vtkGenericCell()
-      cellId = vtk.mutable(0)
-      subId = vtk.mutable(0)
-      if inputPDCellLocator.IntersectWithLine(originalPointPos, a1, tol, t, intersectionPos, par, subId, cellId, cell):
-        points.SetPoint(pointId, intersectionPos[0], intersectionPos[1], intersectionPos[2])
-    points.Modified()
-    self._saveIntermediateResult("CarveCavitiesResult", shrinkModelPD)
+        t = vtk.mutable(0)
+        intersectionPos = np.array([0.0,0.0,0.0]) #global
+        par = np.array([0.0,0.0,0.0]) #parametric
+        cell = vtk.vtkGenericCell()
+        cellId = vtk.mutable(0)
+        subId = vtk.mutable(0)
+        if inputPDCellLocator.IntersectWithLine(originalPointPos, a1, tol, t, intersectionPos, par, subId, cellId, cell):
+          if t>minParametricDistance:
+            if t > minParametricDistance * 2:
+              t = minParametricDistance * 2
+            updatedPos = originalPointPos + (t-minParametricDistance) * vector
+            points.SetPoint(pointId, updatedPos)
+
+      points.Modified()
+      self._saveIntermediateResult("CarveCavitiesResult", shrinkModelPD)
+
+
     return shrinkModelPD
 
   def _shellPreserveCracks(self, inputPD, shrinkModelPD, spacing):
@@ -956,43 +892,54 @@ class WrapSolidifyLogic(object):
 
     shrinkModelPD.DeepCopy(triangleFilter.GetOutput())
 
-
+ARG_DEFAULTS = {}
 
 ARG_MODE = 'mode'
 MODE_OUTER_SURFACE = 'outerSurface'
 MODE_INNER_SURFACE = 'innerSurface'
-DEFAULT_MODE = MODE_OUTER_SURFACE
+ARG_OPTIONS[ARG_MODE] = [MODE_OUTER_SURFACE, MODE_INNER_SURFACE]
+ARG_DEFAULTS[ARG_MODE] = MODE_OUTER_SURFACE
 
-ARG_INNER_SURFACE_SEED_SEGMENT_ID = 'innerSurfaceSegmentID'
+ARG_REGION = 'region'
+REGION_LARGEST = 'largest'
+REGION_SEGMENT = 'segment'
+ARG_OPTIONS[ARG_REGION] = [REGION_LARGEST, REGION_SEGMENT]
+ARG_DEFAULTS[ARG_REGION] = REGION_LARGEST
+
+ARG_REGION_SEGMENT_ID = 'regionSegmentID'
+ARG_DEFAULTS[ARG_REGION_SEGMENT_ID] = ''
+
+ARG_REGION_EXTEND = 'extendRegion'
+ARG_DEFAULTS[ARG_REGION_EXTEND] = False
+
+ARG_REGION_EXTEND_DIAMETER = 'regionExtendDiameter'
+ARG_DEFAULTS[ARG_REGION_EXTEND_DIAMETER] = 10.0
+
+ARG_CREATE_SHELL = 'createShell'
+ARG_DEFAULTS[ARG_CREATE_SHELL] = False
+
+ARG_SHELL_THICKNESS = 'shellThickness'
+ARG_DEFAULTS[ARG_SHELL_THICKNESS] = 1.5
+
+ARG_SHELL_PRESERVE_CRACKS = 'preserveCracks'
+ARG_DEFAULTS[ARG_SHELL_PRESERVE_CRACKS] = True
+
+ARG_OUTPUT_TYPE = 'outputType'
+OUTPUT_MODEL = 'model'
+OUTPUT_SEGMENTATION = 'segmentation'
+ARG_OPTIONS[ARG_OUTPUT_TYPE] = [OUTPUT_MODEL, OUTPUT_SEGMENTATION]
+ARG_DEFAULTS[ARG_OUTPUT_TYPE] = OUTPUT_SEGMENTATION
+
+ARG_OUTPUT_MODEL_NODE = 'WrapSolidify.OutputModelNodeID'
+
+ARG_REMESH_OVERSAMPLING = 'remeshOversampling'
+ARG_DEFAULTS[ARG_REMESH_OVERSAMPLING] = 1.5  # 1.5x oversampling by default
 
 ARG_SMOOTHINGFACTOR = 'smoothingFactor'
-DEFAULT_SMOOTHINGFACTOR = 0.2
+ARG_DEFAULTS[ARG_SMOOTHINGFACTOR] = 0.2
 
-ARG_CARVECAVITIES = 'carveCavities'
-DEFAULT_CARVECAVITIES = False
-ARG_CAVITIESDIAMETER = 'cavitiesDiameter'
-DEFAULT_CAVITIESDIAMETER = 20.0
-ARG_CAVITIESDEPTH = 'cavitiesDepth'
-DEFAULT_CAVITIESDEPTH = 100.0
+ARG_ITERATIONS = 'iterations'
+ARG_DEFAULTS[ARG_ITERATIONS] = 6
 
-ARG_CREATESHELL = 'createShell'
-DEFAULT_CREATESHELL = False
-ARG_SHELLTHICKNESS = 'shellThickness'
-DEFAULT_SHELLTHICKNESS = 1.5
-ARG_PRESERVECRACKS = 'preserveCracks'
-DEFAULT_PRESERVECRACKS = True
-
-ARG_OUTPUTTYPE = 'outputType'
-OUTPUT_MODEL = 'MODEL'
-OUTPUT_SEGMENTATION = 'SEGMENTATION'
-DEFAULT_OUTPUTTYPE = OUTPUT_SEGMENTATION
-
-ARG_OUTPUTMODELNODE = 'WrapSolidify.OutputModelNodeID'
-DEFAULT_OUTPUTMODELNODE = ''
-
-ARG_ITERATIONS = 'iterationsNr'
-DEFAULT_ITERATIONS = 6
-ARG_SPACING = 'spacing'
-DEFAULT_SPACING = 1.5  # 1.5x oversampling by default
-ARG_SAVEINTERMEDIATERESULTS = 'saveIntermediateResults'
-DEFAULT_SAVEINTERMEDIATERESULTS = False
+ARG_SAVE_INTERMEDIATE_RESULTS = 'saveIntermediateResults'
+ARG_DEFAULTS[ARG_SAVE_INTERMEDIATE_RESULTS] = False
