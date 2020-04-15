@@ -45,6 +45,9 @@
       <property name="bottomMargin">
        <number>0</number>
       </property>
+      <property name="verticalSpacing">
+       <number>0</number>
+      </property>
       <item row="0" column="0">
        <widget class="QRadioButton" name="modeOuterSurfaceRadioButton">
         <property name="text">
@@ -84,6 +87,9 @@
       <property name="bottomMargin">
        <number>0</number>
       </property>
+      <property name="verticalSpacing">
+       <number>0</number>
+      </property>
       <item row="1" column="0">
        <widget class="QRadioButton" name="regionManualRadioButton">
         <property name="text">
@@ -94,12 +100,12 @@
       <item row="0" column="0">
        <widget class="QRadioButton" name="regionAutoRadioButton">
         <property name="text">
-         <string>Auto (largest cavity)</string>
+         <string>Automatic</string>
         </property>
        </widget>
       </item>
       <item row="1" column="1">
-       <widget class="qMRMLSegmentSelectorWidget" name="innerSurfaceSeedSegmentSelector">
+       <widget class="qMRMLSegmentSelectorWidget" name="regionSegmentSelector">
         <property name="segmentationNodeSelectorVisible">
          <bool>false</bool>
         </property>
@@ -154,7 +160,7 @@
        </widget>
       </item>
       <item>
-       <widget class="qMRMLSliderWidget" name="extendMinimumDiameterSlider">
+       <widget class="qMRMLSliderWidget" name="regionExtendDiameterSlider">
         <property name="toolTip">
          <string>Cavities with smaller diameter than this threshold will not be carved out.</string>
         </property>
@@ -279,7 +285,7 @@
        </widget>
       </item>
       <item row="1" column="1">
-       <widget class="qMRMLNodeComboBox" name="outputModelSelector">
+       <widget class="qMRMLNodeComboBox" name="outputModelNodeSelector">
         <property name="nodeTypes">
          <stringlist>
           <string>vtkMRMLModelNode</string>
@@ -490,44 +496,44 @@
   <connection>
    <sender>SegmentEditorWrapSolidify</sender>
    <signal>mrmlSceneChanged(vtkMRMLScene*)</signal>
-   <receiver>innerSurfaceSeedSegmentSelector</receiver>
+   <receiver>regionSegmentSelector</receiver>
    <slot>setMRMLScene(vtkMRMLScene*)</slot>
    <hints>
     <hint type="sourcelabel">
      <x>144</x>
-     <y>396</y>
+     <y>351</y>
     </hint>
     <hint type="destinationlabel">
-     <x>359</x>
-     <y>29</y>
+     <x>260</x>
+     <y>71</y>
     </hint>
    </hints>
   </connection>
   <connection>
    <sender>SegmentEditorWrapSolidify</sender>
    <signal>mrmlSceneChanged(vtkMRMLScene*)</signal>
-   <receiver>outputModelSelector</receiver>
+   <receiver>outputModelNodeSelector</receiver>
    <slot>setMRMLScene(vtkMRMLScene*)</slot>
    <hints>
     <hint type="sourcelabel">
      <x>230</x>
-     <y>379</y>
+     <y>351</y>
     </hint>
     <hint type="destinationlabel">
-     <x>243</x>
-     <y>197</y>
+     <x>183</x>
+     <y>163</y>
     </hint>
    </hints>
   </connection>
   <connection>
    <sender>SegmentEditorWrapSolidify</sender>
    <signal>mrmlSceneChanged(vtkMRMLScene*)</signal>
-   <receiver>extendMinimumDiameterSlider</receiver>
+   <receiver>regionExtendDiameterSlider</receiver>
    <slot>setMRMLScene(vtkMRMLScene*)</slot>
    <hints>
     <hint type="sourcelabel">
      <x>73</x>
-     <y>368</y>
+     <y>351</y>
     </hint>
     <hint type="destinationlabel">
      <x>185</x>
@@ -543,11 +549,11 @@
    <hints>
     <hint type="sourcelabel">
      <x>202</x>
-     <y>358</y>
+     <y>351</y>
     </hint>
     <hint type="destinationlabel">
-     <x>415</x>
-     <y>152</y>
+     <x>291</x>
+     <y>118</y>
     </hint>
    </hints>
   </connection>
